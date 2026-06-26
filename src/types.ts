@@ -1,6 +1,11 @@
 export type BoardingStatus = 'waiting' | 'boarded' | 'absent' | 'arrived';
 export type BuildingKey = 'wanas' | 'hadra' | 'nagar' | 'new' | 'demiana';
 
+export interface Point {
+  lat: number;
+  lng: number;
+}
+
 export interface Student {
   id: string;
   order: number; // original CSV sequence
