@@ -1,15 +1,10 @@
 {
   "version": 2,
   "cleanUrls": true,
-  "functions": {
-    "api/dispatch-brief.ts": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "rewrites": [
     {
-      "source": "/api/dispatch-brief",
-      "destination": "/api/dispatch-brief"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",
