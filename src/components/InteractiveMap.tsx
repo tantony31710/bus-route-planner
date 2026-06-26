@@ -25,13 +25,21 @@ interface InteractiveMapProps {
 // Custom polyline renderer for Google Maps tab
 function GoogleMapRouteLine({ stops }: { stops: RouteStop[] }) {
   const map = useMap();
+  const [pathCoords, setPathCoords] = useState<any[]>([]);
 
   useEffect(() => {
     if (!map || stops.length < 2) return;
 
-    // Build latlng literals list of stops, then calculate high resolution street path
     const rawCoords = stops.map(stop => ({ lat: stop.lat, lng: stop.lng }));
-    const pathCoords = getHighResolutionRoutePath(rawCoords);
+
+    getHighResolutionRoutePath(rawCoords, API_KEY).then(path => {
+      setPathCoords(path);
+    });
+
+  }, [map, stops]);
+
+  useEffect(() => {
+    if (pathCoords.length === 0) return;
 
     const polylineBg = new google.maps.Polyline({
       path: pathCoords,
@@ -52,10 +60,9 @@ function GoogleMapRouteLine({ stops }: { stops: RouteStop[] }) {
     polylineBg.setMap(map);
     polylineFg.setMap(map);
 
-    // Zoom and fit bounds safely
     try {
       const bounds = new google.maps.LatLngBounds();
-      rawCoords.forEach(coord => bounds.extend(coord));
+      stops.map(stop => ({ lat: stop.lat, lng: stop.lng })).forEach(coord => bounds.extend(coord));
       map.fitBounds(bounds);
     } catch (e) {
       console.warn('Could not fit bounds on Map', e);
@@ -65,7 +72,7 @@ function GoogleMapRouteLine({ stops }: { stops: RouteStop[] }) {
       polylineBg.setMap(null);
       polylineFg.setMap(null);
     };
-  }, [map, stops]);
+  }, [map, pathCoords, stops]);
 
   return null;
 }
@@ -200,10 +207,13 @@ export default function InteractiveMap({
   }, [students]);
 
   // Current calculated active path connecting the chosen stop sequence
-  const activePathPoints = useMemo(() => {
+  const [activePathPoints, setActivePathPoints] = useState<any[]>([]);
+
+  useEffect(() => {
     const rawPoints = routeStops.map(stop => ({ lat: stop.lat, lng: stop.lng }));
-    const highResPoints = getHighResolutionRoutePath(rawPoints);
-    return highResPoints.map(p => project(p.lat, p.lng));
+    getHighResolutionRoutePath(rawPoints, API_KEY).then(highResPoints => {
+      setActivePathPoints(highResPoints.map(p => project(p.lat, p.lng)));
+    });
   }, [routeStops, project]);
 
   // Project bus position if simulated
