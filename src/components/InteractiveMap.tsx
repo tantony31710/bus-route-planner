@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Student, RouteStop, TrafficSegment, BuildingKey } from '../types';
 import { BUILDINGS_INFO } from '../data/students';
-import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, HelpCircle, Key, LocateFixed, LocateOff } from 'lucide-react';
+import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, HelpCircle, Key, LocateFixed, LocateOff, Navigation } from 'lucide-react';
 import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { getHighResolutionRoutePath, snapToRoadNetwork } from '../utils/routing';
 
@@ -146,6 +146,161 @@ function GoogleMapRouteLine({ stops, livePos }: { stops: RouteStop[]; livePos?: 
   }, [map, pathCoords, stops]);
 
   return null;
+}
+
+// ── Directions Panel ────────────────────────────────────────────────────────
+// Uses Google Maps embed (free, no API key, exact road routing + ETA)
+function DirectionsPanel({
+  stops,
+  liveDriverPos
+}: {
+  stops: RouteStop[];
+  liveDriverPos?: { lat: number; lng: number } | null;
+}) {
+  const [customOrigin, setCustomOrigin] = useState('');
+  const [customDest, setCustomDest] = useState('');
+  const [useCustom, setUseCustom] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
+
+  // Build the embed URL from route stops
+  const embedUrl = useMemo(() => {
+    const hubStops = stops.filter(s => s.type === 'hub');
+    const studentStops = stops.filter(s => s.type !== 'hub');
+
+    let origin = '';
+    let destination = '';
+    const waypoints: string[] = [];
+
+    if (useCustom && customOrigin && customDest) {
+      origin = customOrigin;
+      destination = customDest;
+      // Add all student stops as waypoints
+      studentStops.forEach(s => waypoints.push(`${s.lat},${s.lng}`));
+    } else {
+      // Use live GPS if available, otherwise first hub
+      if (liveDriverPos) {
+        origin = `${liveDriverPos.lat},${liveDriverPos.lng}`;
+      } else if (hubStops.length > 0) {
+        origin = `${hubStops[0].lat},${hubStops[0].lng}`;
+      }
+      // Last hub is destination
+      if (hubStops.length > 1) {
+        destination = `${hubStops[hubStops.length - 1].lat},${hubStops[hubStops.length - 1].lng}`;
+      } else if (hubStops.length === 1) {
+        destination = `${hubStops[0].lat},${hubStops[0].lng}`;
+      }
+      // Add student stops as waypoints (Google Maps embed supports up to 9)
+      studentStops.slice(0, 9).forEach(s => waypoints.push(`${s.lat},${s.lng}`));
+    }
+
+    if (!origin || !destination) return null;
+
+    const waypointParam = waypoints.length > 0
+      ? `&waypoints=${waypoints.map(w => encodeURIComponent(w)).join('|')}`
+      : '';
+
+    return `https://www.google.com/maps/embed/v1/directions?key=AIzaSyBnJZUfE8FYyyPOAFQnt0tqQ92NNU_5K_k&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}${waypointParam}&mode=driving&avoid=tolls&language=en&region=EG`;
+  }, [stops, liveDriverPos, useCustom, customOrigin, customDest, iframeKey]);
+
+  // Also build a "Open in Google Maps" URL for full navigation
+  const openInMapsUrl = useMemo(() => {
+    const hubStops = stops.filter(s => s.type === 'hub');
+    const studentStops = stops.filter(s => s.type !== 'hub');
+
+    let origin = liveDriverPos
+      ? `${liveDriverPos.lat},${liveDriverPos.lng}`
+      : hubStops[0] ? `${hubStops[0].lat},${hubStops[0].lng}` : '';
+    let destination = hubStops[hubStops.length - 1]
+      ? `${hubStops[hubStops.length - 1].lat},${hubStops[hubStops.length - 1].lng}`
+      : '';
+
+    const allWaypoints = studentStops.slice(0, 9).map(s => `${s.lat},${s.lng}`).join('/');
+    if (!origin || !destination) return '#';
+    return `https://www.google.com/maps/dir/${encodeURIComponent(origin)}/${allWaypoints ? allWaypoints + '/' : ''}${encodeURIComponent(destination)}`;
+  }, [stops, liveDriverPos]);
+
+  return (
+    <div className="flex flex-col gap-3 border border-[#2A2A30] bg-[#0A0A0C] rounded-xl overflow-hidden h-[420px]">
+      {/* Controls bar */}
+      <div className="flex items-center gap-2 px-3 pt-3 flex-wrap shrink-0">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <button
+            onClick={() => { setUseCustom(false); setIframeKey(k => k + 1); }}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+              !useCustom
+                ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
+                : 'bg-[#1A1A1F] border-[#2A2A30] text-[#8E9299] hover:text-white'
+            }`}
+          >
+            🚌 Auto Route ({stops.filter(s => s.type !== 'hub').length} stops)
+          </button>
+          <button
+            onClick={() => setUseCustom(true)}
+            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+              useCustom
+                ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
+                : 'bg-[#1A1A1F] border-[#2A2A30] text-[#8E9299] hover:text-white'
+            }`}
+          >
+            ✏️ Custom
+          </button>
+        </div>
+        <a
+          href={openInMapsUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all whitespace-nowrap"
+        >
+          📱 Open in Google Maps
+        </a>
+      </div>
+
+      {/* Custom origin/destination inputs */}
+      {useCustom && (
+        <div className="flex gap-2 px-3 shrink-0">
+          <input
+            type="text"
+            placeholder="Start address or lat,lng"
+            value={customOrigin}
+            onChange={e => setCustomOrigin(e.target.value)}
+            className="flex-1 bg-[#1A1A1F] border border-[#2A2A30] rounded-lg px-3 py-1.5 text-xs text-white placeholder-[#8E9299] focus:outline-none focus:border-blue-500"
+          />
+          <input
+            type="text"
+            placeholder="End address or lat,lng"
+            value={customDest}
+            onChange={e => setCustomDest(e.target.value)}
+            className="flex-1 bg-[#1A1A1F] border border-[#2A2A30] rounded-lg px-3 py-1.5 text-xs text-white placeholder-[#8E9299] focus:outline-none focus:border-blue-500"
+          />
+          <button
+            onClick={() => setIframeKey(k => k + 1)}
+            className="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500 text-white hover:bg-blue-600 transition-all"
+          >
+            Go
+          </button>
+        </div>
+      )}
+
+      {/* Google Maps Directions Embed */}
+      <div className="flex-1 relative">
+        {embedUrl ? (
+          <iframe
+            key={iframeKey}
+            src={embedUrl}
+            className="w-full h-full border-0"
+            allowFullScreen
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+            title="Google Maps Directions"
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-[#8E9299] text-sm">
+            No route stops to display
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function InteractiveMap({
@@ -392,6 +547,17 @@ export default function InteractiveMap({
             }`}
           >
             Google Map 3D
+          </button>
+          <button
+            onClick={() => setMapViewMode('directions')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 ${
+              mapViewMode === 'directions'
+                ? 'bg-rose-500 text-white'
+                : 'text-[#8E9299] hover:text-[#F0F0F0]'
+            }`}
+          >
+            <Navigation className="w-3 h-3" />
+            Directions
           </button>
         </div>
       </div>
