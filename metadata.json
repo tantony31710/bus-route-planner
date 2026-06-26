@@ -1,0 +1,6 @@
+{
+  "name": "School Bus Route Planner & Attendance Tracker",
+  "description": "An interactive smart bus planner that calculates optimal stop sequences, tracks live traffic and delay alerts, monitors student attendance, and determines classroom drop-off prioritizations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
