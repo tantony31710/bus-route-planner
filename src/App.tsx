@@ -49,12 +49,12 @@ export default function App() {
 
   const [startHubId, setStartHubId] = useState(() => {
     const val = localStorage.getItem('roxy_bus_start_hub');
-    return (val && val !== 'roxy_square') ? val : 'saint_mark_church';
+    return val || 'roxy_square';
   });
 
   const [endHubId, setEndHubId] = useState(() => {
     const val = localStorage.getItem('roxy_bus_end_hub');
-    return (val && val !== 'church_complex') ? val : 'saint_mark_church';
+    return val || 'church_complex';
   });
 
   const [isOptimized, setIsOptimized] = useState(() => {
