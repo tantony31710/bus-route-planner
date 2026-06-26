@@ -1,8 +1,8 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Student, RouteStop, TrafficSegment, BuildingKey } from '../types';
 import { BUILDINGS_INFO } from '../data/students';
-import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, HelpCircle, Key } from 'lucide-react';
-import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, HelpCircle, Key, LocateFixed, LocateOff } from 'lucide-react';
+import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { getHighResolutionRoutePath, snapToRoadNetwork } from '../utils/routing';
 
 // Read API key from environment, fallback to the provided demo key
@@ -19,273 +19,132 @@ interface InteractiveMapProps {
   currentStopIndex: number;
   simulatedBusPos: { lat: number; lng: number } | null;
   trafficSegments: TrafficSegment[];
-  onSelectStudent?: (studentId: string) => void;
-  isGpsActive?: boolean;
   liveDriverPos?: { lat: number; lng: number } | null;
-  onToggleGps?: () => void;
+  gpsStatus?: 'idle' | 'requesting' | 'active' | 'denied' | 'unavailable';
+  onRequestGps?: () => void;
+  onStopGps?: () => void;
+  onSelectStudent?: (studentId: string) => void;
 }
 
-// Custom polyline renderer for Google Maps tab using modern Routes API
-function GoogleMapRouteLine({ stops }: { stops: RouteStop[] }) {
+// Custom polyline renderer for Google Maps tab
+function GoogleMapRouteLine({ stops, livePos }: { stops: RouteStop[]; livePos?: { lat: number; lng: number } | null }) {
   const map = useMap();
-  const routesLib = useMapsLibrary('routes');
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const [pathCoords, setPathCoords] = useState<any[]>([]);
+
+  // Pan map to live driver position when it updates
+  useEffect(() => {
+    if (!map || !livePos) return;
+    map.panTo(livePos);
+  }, [map, livePos]);
 
   useEffect(() => {
     if (!map || stops.length < 2) return;
 
-    let routePolylines: google.maps.Polyline[] = [];
-    const rawCoords = stops.map(stop => ({ lat: stop.lat, lng: stop.lng }));
+    // Use the JS SDK DirectionsService — works with demo/free API keys,
+    // no billing required, snaps to real roads automatically.
+    const directionsService = new google.maps.DirectionsService();
 
-    // Helper to calculate Haversine distance in meters
-    const getHaversineDistance = (p1: { lat: number; lng: number }, p2: { lat: number; lng: number }): number => {
-      const R = 6371e3; // Earth's radius in meters
-      const rad = Math.PI / 180;
-      const dLat = (p2.lat - p1.lat) * rad;
-      const dLng = (p2.lng - p1.lng) * rad;
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(p1.lat * rad) * Math.cos(p2.lat * rad) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-    };
+    const origin = stops[0];
+    const destination = stops[stops.length - 1];
+    const waypoints = stops.slice(1, -1).map(s => ({
+      location: new google.maps.LatLng(s.lat, s.lng),
+      stopover: true
+    }));
 
-    // Helper to render polyline points cleanly on the map (fallback method if DirectionsRenderer fails)
-    const renderPolylinePath = (pathPoints: { lat: number; lng: number }[]) => {
-      // Clear any existing polylines
-      routePolylines.forEach(p => p.setMap(null));
-      routePolylines = [];
+    // DirectionsService allows max 25 waypoints total (origin + dest + 23 stops).
+    // If we exceed that, chunk the stops into batches and stitch the paths.
+    const MAX_WAYPOINTS = 23;
 
-      const polylineBg = new google.maps.Polyline({
-        path: pathPoints,
-        geodesic: true,
-        strokeColor: '#0F172A',
-        strokeOpacity: 0.85,
-        strokeWeight: 7.5,
-      });
-
-      const polylineFg = new google.maps.Polyline({
-        path: pathPoints,
-        geodesic: true,
-        strokeColor: '#3B82F6',
-        strokeOpacity: 1.0,
-        strokeWeight: 3.5,
-      });
-
-      polylineBg.setMap(map);
-      polylineFg.setMap(map);
-
-      routePolylines.push(polylineBg, polylineFg);
-    };
-
-    // Helper to draw our local custom high-res road network snapped route
-    const drawLocalFallbackRoute = () => {
-      console.log('[Routing] Drawing local custom high-resolution road-snapped route.');
-      const pathCoords = getHighResolutionRoutePath(rawCoords);
-      renderPolylinePath(pathCoords);
-    };
-
-    // Validation utility to verify that the returned polyline contains multiple points
-    // confirming a street-following route, rather than a single direct segment between two stops.
-    const validateRoutesResponse = (
-      pathPoints: { lat: number; lng: number }[],
-      stopsCoords: { lat: number; lng: number }[]
-    ): boolean => {
-      if (pathPoints.length < 3) {
-        console.warn('[Routing Validation] Too few path points. Route is likely a single direct segment.');
-        return false;
-      }
-
-      // If the number of points returned is <= the number of stops, it's just straight line segments connecting stops
-      if (pathPoints.length <= stopsCoords.length) {
-        console.warn('[Routing Validation] Point count is less than or equal to stop count. Likely direct straight-line fallback segments.');
-        return false;
-      }
-
-      // Geometric validation: check if the actual path length is too close to a straight-line direct route
-      let totalPathDistance = 0;
-      for (let i = 0; i < pathPoints.length - 1; i++) {
-        totalPathDistance += getHaversineDistance(pathPoints[i], pathPoints[i + 1]);
-      }
-
-      let directStopDistance = 0;
-      for (let i = 0; i < stopsCoords.length - 1; i++) {
-        directStopDistance += getHaversineDistance(stopsCoords[i], stopsCoords[i + 1]);
-      }
-
-      if (directStopDistance > 0) {
-        const ratio = totalPathDistance / directStopDistance;
-        // If the path length is within 0.1% of the direct stop distance, it's virtually a straight line
-        if (ratio >= 0.999 && ratio <= 1.001) {
-          console.warn(`[Routing Validation] Total path distance is almost identical to straight line (ratio: ${ratio.toFixed(5)}). Rejected as a straight line.`);
-          return false;
-        }
-      }
-
-      return true;
-    };
-
-    // Helper to make a Google Routes API request with customized routing preference
-    const makeRoutesApiRequest = (preference: string) => {
-      const request = {
-        origin: {
-          location: {
-            latLng: {
-              latitude: rawCoords[0].lat,
-              longitude: rawCoords[0].lng
-            }
-          }
-        },
-        destination: {
-          location: {
-            latLng: {
-              latitude: rawCoords[rawCoords.length - 1].lat,
-              longitude: rawCoords[rawCoords.length - 1].lng
-            }
-          }
-        },
-        intermediates: rawCoords.slice(1, -1).map(coord => ({
-          location: {
-            latLng: {
-              latitude: coord.lat,
-              longitude: coord.lng
-            }
-          }
-        })),
-        routingPreference: preference as any,
-        travelMode: 'DRIVE' as any,
-        fields: ['path', 'distanceMeters', 'durationMillis', 'viewport']
-      };
-
-      console.log(`[Routes API] Requesting with routingPreference: ${preference} and travelMode: 'DRIVE'.`);
-      return routesLib.Route.computeRoutes(request as any)
-        .then(({ routes }) => {
-          if (routes && routes[0] && routes[0].path) {
-            const pathPoints = routes[0].path.map((pt: any) => {
-              if (typeof pt.lat === 'function') {
-                return { lat: pt.lat(), lng: pt.lng() };
-              } else if (typeof pt.latitude === 'number') {
-                return { lat: pt.latitude, lng: pt.longitude };
-              } else if (pt.lat !== undefined && pt.lng !== undefined) {
-                return { lat: pt.lat, lng: pt.lng };
-              } else {
-                return pt;
-              }
+    const fetchChunk = (chunkStops: RouteStop[]): Promise<google.maps.LatLng[]> => {
+      return new Promise((resolve) => {
+        const wps = chunkStops.slice(1, -1).map(s => ({
+          location: new google.maps.LatLng(s.lat, s.lng),
+          stopover: true
+        }));
+        directionsService.route({
+          origin: new google.maps.LatLng(chunkStops[0].lat, chunkStops[0].lng),
+          destination: new google.maps.LatLng(chunkStops[chunkStops.length - 1].lat, chunkStops[chunkStops.length - 1].lng),
+          waypoints: wps,
+          travelMode: google.maps.TravelMode.DRIVING,
+          optimizeWaypoints: false,
+        }, (result, status) => {
+          if (status === google.maps.DirectionsStatus.OK && result) {
+            const pts: google.maps.LatLng[] = [];
+            result.routes[0].legs.forEach(leg => {
+              leg.steps.forEach(step => {
+                step.path.forEach(pt => pts.push(pt));
+              });
             });
-
-            const isValid = validateRoutesResponse(pathPoints, rawCoords);
-            if (isValid) {
-              return { pathPoints, viewport: routes[0].viewport };
-            } else {
-              throw new Error('Returned polyline is a straight line segment, failing street-following validation.');
-            }
+            resolve(pts);
           } else {
-            throw new Error('computeRoutes response lacks path coordinates.');
+            console.warn('DirectionsService chunk failed:', status);
+            // Fall back to straight lines for this chunk
+            resolve(chunkStops.map(s => new google.maps.LatLng(s.lat, s.lng)));
           }
         });
+      });
     };
 
-    // Display Logic using 'DirectionsRenderer' for visually snapping routes to road network automatically
-    if (typeof google !== 'undefined' && google.maps) {
-      const directionsService = new google.maps.DirectionsService();
-
-      if (directionsRendererRef.current) {
-        directionsRendererRef.current.setMap(null);
+    const run = async () => {
+      // Split stops into chunks of MAX_WAYPOINTS + 2 (origin/dest)
+      const chunkSize = MAX_WAYPOINTS + 2;
+      const chunks: RouteStop[][] = [];
+      for (let i = 0; i < stops.length - 1; i += MAX_WAYPOINTS + 1) {
+        chunks.push(stops.slice(i, Math.min(i + chunkSize, stops.length)));
+        if (chunks[chunks.length - 1].length < 2) chunks.pop();
       }
+      if (chunks.length === 0) chunks.push(stops);
 
-      const renderer = new google.maps.DirectionsRenderer({
-        map: map,
-        suppressMarkers: true,
-        preserveViewport: true,
-        polylineOptions: {
-          strokeColor: '#3B82F6',
-          strokeOpacity: 1.0,
-          strokeWeight: 4.5,
-        }
-      });
-      directionsRendererRef.current = renderer;
+      const allPts: google.maps.LatLng[] = [];
+      for (let i = 0; i < chunks.length; i++) {
+        const pts = await fetchChunk(chunks[i]);
+        // Skip first point of subsequent chunks to avoid duplicating junction
+        const start = i > 0 ? 1 : 0;
+        allPts.push(...pts.slice(start));
+      }
+      setPathCoords(allPts);
+    };
 
-      const waypoints = rawCoords.slice(1, -1).map(coord => ({
-        location: new google.maps.LatLng(coord.lat, coord.lng),
-        stopover: true
-      }));
+    run();
 
-      const directionsRequest: google.maps.DirectionsRequest = {
-        origin: new google.maps.LatLng(rawCoords[0].lat, rawCoords[0].lng),
-        destination: new google.maps.LatLng(rawCoords[rawCoords.length - 1].lat, rawCoords[rawCoords.length - 1].lng),
-        waypoints: waypoints,
-        travelMode: google.maps.TravelMode.DRIVING
-      };
+  }, [map, stops]);
 
-      directionsService.route(directionsRequest, (result, status) => {
-        if (status === google.maps.DirectionsStatus.OK && result) {
-          renderer.setDirections(result);
-          console.log('[Routing] Successfully rendered perfectly snapped road network route using DirectionsRenderer.');
-        } else {
-          console.warn('[Routing] DirectionsRenderer / DirectionsService failed:', status);
-          drawLocalFallbackRoute();
-        }
-      });
-    } else {
-      drawLocalFallbackRoute();
-    }
+  useEffect(() => {
+    if (pathCoords.length === 0) return;
 
-    // Google Routes API (computeRoutes) request and validation pipeline
-    if (routesLib && routesLib.Route) {
-      makeRoutesApiRequest('TRAFFIC_AWARE')
-        .then(({ pathPoints, viewport }) => {
-          console.log(`[Routing] Routes API request validated successfully with ${pathPoints.length} points.`);
-          if (viewport) {
-            map.fitBounds(viewport);
-          }
-        })
-        .catch(err => {
-          console.warn(`[Routing] Initial Routes API request failed or was a straight-line: "${err.message}". Retrying with fallback routing parameters...`);
-          // Automatically trigger fallback fetch with different routing parameters ('TRAFFIC_UNAWARE')
-          makeRoutesApiRequest('TRAFFIC_UNAWARE')
-            .then(({ pathPoints, viewport }) => {
-              console.log(`[Routing] Fallback Routes API request validated successfully with ${pathPoints.length} points.`);
-              if (viewport) {
-                map.fitBounds(viewport);
-              }
-            })
-            .catch(fallbackErr => {
-              console.error('[Routing] Fallback Routes API request also failed:', fallbackErr.message);
-              // Fallback to local routing is handled, display is already set up on DirectionsRenderer or fallback
-            });
-        });
-    }
+    const polylineBg = new google.maps.Polyline({
+      path: pathCoords,
+      geodesic: true,
+      strokeColor: '#0F172A',
+      strokeOpacity: 0.85,
+      strokeWeight: 7.5,
+    });
 
-    // Zoom and fit bounds safely
+    const polylineFg = new google.maps.Polyline({
+      path: pathCoords,
+      geodesic: true,
+      strokeColor: '#3B82F6',
+      strokeOpacity: 1.0,
+      strokeWeight: 3.5,
+    });
+
+    polylineBg.setMap(map);
+    polylineFg.setMap(map);
+
     try {
       const bounds = new google.maps.LatLngBounds();
-      rawCoords.forEach(coord => bounds.extend(coord));
+      stops.map(stop => ({ lat: stop.lat, lng: stop.lng })).forEach(coord => bounds.extend(coord));
       map.fitBounds(bounds);
     } catch (e) {
       console.warn('Could not fit bounds on Map', e);
     }
 
     return () => {
-      routePolylines.forEach(p => p.setMap(null));
-      if (directionsRendererRef.current) {
-        directionsRendererRef.current.setMap(null);
-        directionsRendererRef.current = null;
-      }
+      polylineBg.setMap(null);
+      polylineFg.setMap(null);
     };
-  }, [map, routesLib, stops]);
+  }, [map, pathCoords, stops]);
 
-  return null;
-}
-
-// Helper to auto-pan the Google Map to follow the live driver position
-function GoogleMapPanToDriver({ liveDriverPos }: { liveDriverPos: { lat: number; lng: number } | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (map && liveDriverPos) {
-      map.panTo(liveDriverPos);
-    }
-  }, [map, liveDriverPos]);
   return null;
 }
 
@@ -295,10 +154,11 @@ export default function InteractiveMap({
   currentStopIndex,
   simulatedBusPos,
   trafficSegments,
-  onSelectStudent,
-  isGpsActive = false,
-  liveDriverPos = null,
-  onToggleGps
+  liveDriverPos,
+  gpsStatus = 'idle',
+  onRequestGps,
+  onStopGps,
+  onSelectStudent
 }: InteractiveMapProps) {
   const [mapViewMode, setMapViewMode] = useState<'2d' | '3d' | 'gmaps'>('2d');
   const [activeStopHover, setActiveStopHover] = useState<string | null>(null);
@@ -422,10 +282,13 @@ export default function InteractiveMap({
   }, [students]);
 
   // Current calculated active path connecting the chosen stop sequence
-  const activePathPoints = useMemo(() => {
+  const [activePathPoints, setActivePathPoints] = useState<any[]>([]);
+
+  useEffect(() => {
     const rawPoints = routeStops.map(stop => ({ lat: stop.lat, lng: stop.lng }));
-    const highResPoints = getHighResolutionRoutePath(rawPoints);
-    return highResPoints.map(p => project(p.lat, p.lng));
+    getHighResolutionRoutePath(rawPoints, API_KEY).then(highResPoints => {
+      setActivePathPoints(highResPoints.map(p => project(p.lat, p.lng)));
+    });
   }, [routeStops, project]);
 
   // Project bus position if simulated
@@ -455,24 +318,50 @@ export default function InteractiveMap({
           </p>
         </div>
 
-        <div className="flex items-center gap-3 self-end sm:self-auto">
-          {/* GPS Location Button */}
-          {onToggleGps && (
+        {/* GPS Permission Button */}
+        <div className="flex items-center gap-2 shrink-0">
+          {gpsStatus === 'idle' && (
             <button
-              onClick={onToggleGps}
-              className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
-                isGpsActive
-                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 shadow-lg shadow-emerald-500/5'
-                  : 'bg-[#1A1A22] border border-[#2A2A30] text-[#8E9299] hover:text-[#F0F0F0] hover:bg-[#22222B]'
-              }`}
+              onClick={onRequestGps}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-[#10B981]/10 hover:bg-[#10B981]/20 border border-[#10B981]/20 text-[#34d399] hover:text-white transition-all"
+              title="Use your live GPS location as route start"
             >
-              <span className={`w-2 h-2 rounded-full ${isGpsActive ? 'bg-emerald-400 animate-pulse' : 'bg-[#8E9299]'}`}></span>
-              {isGpsActive ? 'GPS Live • Stop' : 'Use My Location'}
+              <LocateFixed className="w-3.5 h-3.5" />
+              Use My Location
             </button>
           )}
+          {gpsStatus === 'requesting' && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <LocateFixed className="w-3.5 h-3.5 animate-pulse" />
+              Requesting GPS...
+            </span>
+          )}
+          {gpsStatus === 'active' && (
+            <button
+              onClick={onStopGps}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-emerald-500/10 hover:bg-rose-500/10 border border-emerald-500/20 hover:border-rose-500/20 text-emerald-400 hover:text-rose-400 transition-all"
+              title="Stop using live GPS"
+            >
+              <LocateFixed className="w-3.5 h-3.5 animate-pulse" />
+              GPS Live · Stop
+            </button>
+          )}
+          {gpsStatus === 'denied' && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-400">
+              <LocateOff className="w-3.5 h-3.5" />
+              GPS Denied
+            </span>
+          )}
+          {gpsStatus === 'unavailable' && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-[#2A2A30] border border-[#2A2A30] text-[#8E9299]">
+              <LocateOff className="w-3.5 h-3.5" />
+              GPS Unavailable
+            </span>
+          )}
+        </div>
 
-          {/* View Mode Toggle Button Group */}
-          <div className="flex bg-[#0A0A0C] border border-[#2A2A30] rounded-xl p-1 shrink-0 text-[10px] font-bold">
+        {/* View Mode Toggle Button Group */}
+        <div className="flex bg-[#0A0A0C] border border-[#2A2A30] rounded-xl p-1 shrink-0 text-[10px] font-bold">
           <button
             onClick={() => setMapViewMode('2d')}
             className={`px-3 py-1.5 rounded-lg transition-all ${
@@ -506,7 +395,6 @@ export default function InteractiveMap({
           </button>
         </div>
       </div>
-    </div>
 
       {/* Render Google Map tab when selected */}
       {mapViewMode === 'gmaps' ? (
@@ -554,7 +442,7 @@ export default function InteractiveMap({
           ) : (
             <APIProvider apiKey={API_KEY} version="weekly">
               <GoogleMap
-                defaultCenter={{ lat: 30.0935, lng: 31.3150 }}
+                defaultCenter={liveDriverPos || { lat: 30.0935, lng: 31.3150 }}
                 defaultZoom={15}
                 mapId="DEMO_MAP_ID"
                 internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
@@ -597,23 +485,20 @@ export default function InteractiveMap({
                   );
                 })}
 
-                {/* Route Line Connector */}
-                <GoogleMapRouteLine stops={routeStops} />
-
-                {/* Live Driver Tracking & Auto-Pan */}
-                {isGpsActive && liveDriverPos && (
-                  <>
-                    <GoogleMapPanToDriver liveDriverPos={liveDriverPos} />
-                    <AdvancedMarker key="g-live-driver" position={liveDriverPos}>
-                      <div className="flex flex-col items-center">
-                        <div className="bg-[#10B981] text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded-md border border-white shadow-lg whitespace-nowrap mb-1">
-                          📍 YOU
-                        </div>
-                        <Pin background="#10B981" borderColor="#FFF" scale={0.9} />
+                {/* Live Driver GPS Marker */}
+                {liveDriverPos && (
+                  <AdvancedMarker position={liveDriverPos}>
+                    <div className="flex flex-col items-center">
+                      <div className="text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border border-emerald-400 bg-[#0A0A0C] shadow-lg mb-1 whitespace-nowrap">
+                        📍 You Are Here
                       </div>
-                    </AdvancedMarker>
-                  </>
+                      <div className="w-4 h-4 rounded-full bg-emerald-400 border-2 border-white shadow-lg animate-pulse" />
+                    </div>
+                  </AdvancedMarker>
                 )}
+
+                {/* Route Line Connector */}
+                <GoogleMapRouteLine stops={routeStops} livePos={liveDriverPos} />
               </GoogleMap>
             </APIProvider>
           )}
@@ -839,36 +724,17 @@ export default function InteractiveMap({
                 );
               })}
 
-              {/* Live Driver Pulse Indicator (YOU) */}
-              {isGpsActive && liveDriverPos && (() => {
+              {/* 5. Live Driver GPS Pin */}
+              {liveDriverPos && (() => {
                 const { x, y } = project(liveDriverPos.lat, liveDriverPos.lng);
                 return (
-                  <g key="svg-live-driver" className="transition-all duration-500 ease-in-out">
-                    <circle cx={x} cy={y} r="20" fill="none" stroke="#10B981" strokeWidth="1.5" className="animate-pulse" />
-                    <circle cx={x} cy={y} r="14" fill="#0A0A0C" opacity="0.6" />
-                    <circle cx={x} cy={y} r="8" fill="#10B981" stroke="#121217" strokeWidth="2" />
-                    {/* Pulsing visual core */}
-                    <circle cx={x} cy={y} r="4" fill="#E0F2FE" />
-                    <g transform={`translate(${x}, ${y - 24})`} className="pointer-events-none select-none">
-                      <rect
-                        x="-18"
-                        y="-6"
-                        width="36"
-                        height="12"
-                        rx="4"
-                        fill="#0A0A0C"
-                        fillOpacity="0.85"
-                        stroke="#10B981"
-                        strokeWidth="1"
-                      />
-                      <text
-                        textAnchor="middle"
-                        y="2.5"
-                        className="fill-[#10B981] font-sans text-[7px] font-extrabold tracking-wider"
-                      >
-                        📍 YOU
-                      </text>
-                    </g>
+                  <g>
+                    <circle cx={x} cy={y} r="16" fill="none" stroke="#10B981" strokeWidth="1.5" className="animate-ping" opacity="0.4" />
+                    <circle cx={x} cy={y} r="10" fill="#10B981" stroke="#0A0A0C" strokeWidth="2" />
+                    <circle cx={x} cy={y} r="4" fill="white" />
+                    <text x={x} y={y - 18} textAnchor="middle" className="fill-[#34d399] font-bold text-[8px] font-mono">
+                      📍 YOU
+                    </text>
                   </g>
                 );
               })()}
@@ -896,12 +762,6 @@ export default function InteractiveMap({
               Roxy Grid Fleet {mapViewMode === '3d' && '(3D TILT)'}
             </div>
             <div className="space-y-1.5">
-              {isGpsActive && (
-                <p className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#10B981] animate-pulse"></span>
-                  <span className="text-[#10B981] font-bold">📍 YOU (GPS ACTIVE)</span>
-                </p>
-              )}
               <p className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#F59E0B]"></span>
                 <span>Waiting Parents & Pupils</span>

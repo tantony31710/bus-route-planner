@@ -36,13 +36,16 @@ function formatTimeFromOffset(minutesOffset: number, startHour = 8) {
 export default function App() {
   // Core application states
   const [students, setStudents] = useState<Student[]>(() => {
-    // Attempt local storage restore, fallback to initial constants
-    const saved = localStorage.getItem('roxy_bus_students');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.length === 16) {
-        return parsed;
+    try {
+      const saved = localStorage.getItem('roxy_bus_students');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
       }
+    } catch (e) {
+      localStorage.removeItem('roxy_bus_students');
     }
     return INITIAL_STUDENTS;
   });
@@ -69,8 +72,16 @@ export default function App() {
 
   // Manual ordering of student pickup stops (only used if isOptimized is false)
   const [manualStudentIds, setManualStudentIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('roxy_bus_manual_ids');
-    return saved ? JSON.parse(saved) : INITIAL_STUDENTS.map(s => s.id);
+    try {
+      const saved = localStorage.getItem('roxy_bus_manual_ids');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {
+      localStorage.removeItem('roxy_bus_manual_ids');
+    }
+    return INITIAL_STUDENTS.map(s => s.id);
   });
 
   // Live GPS driver location state
@@ -131,13 +142,16 @@ export default function App() {
 
   // AI & Solver parameters
   const [solverConfig, setSolverConfig] = useState<SolverConfig>(() => {
-    const saved = localStorage.getItem('roxy_bus_solver_config');
-    return saved ? JSON.parse(saved) : {
-      type: 'priority',
-      alpha: 1.5,
-      beta: 2.0,
-      gamma: 2.5
-    };
+    try {
+      const saved = localStorage.getItem('roxy_bus_solver_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (e) {
+      localStorage.removeItem('roxy_bus_solver_config');
+    }
+    return { type: 'priority', alpha: 1.5, beta: 2.0, gamma: 2.5 };
   });
 
   const [systemPrompt, setSystemPrompt] = useState(() => {
