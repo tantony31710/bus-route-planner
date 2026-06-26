@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Student, RouteStop, TrafficSegment, BuildingKey } from '../types';
 import { BUILDINGS_INFO } from '../data/students';
-import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, HelpCircle, Key } from 'lucide-react';
+import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, HelpCircle, Key, LocateFixed, LocateOff } from 'lucide-react';
 import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { getHighResolutionRoutePath, snapToRoadNetwork } from '../utils/routing';
 
@@ -19,13 +19,23 @@ interface InteractiveMapProps {
   currentStopIndex: number;
   simulatedBusPos: { lat: number; lng: number } | null;
   trafficSegments: TrafficSegment[];
+  liveDriverPos?: { lat: number; lng: number } | null;
+  gpsStatus?: 'idle' | 'requesting' | 'active' | 'denied' | 'unavailable';
+  onRequestGps?: () => void;
+  onStopGps?: () => void;
   onSelectStudent?: (studentId: string) => void;
 }
 
 // Custom polyline renderer for Google Maps tab
-function GoogleMapRouteLine({ stops }: { stops: RouteStop[] }) {
+function GoogleMapRouteLine({ stops, livePos }: { stops: RouteStop[]; livePos?: { lat: number; lng: number } | null }) {
   const map = useMap();
   const [pathCoords, setPathCoords] = useState<any[]>([]);
+
+  // Pan map to live driver position when it updates
+  useEffect(() => {
+    if (!map || !livePos) return;
+    map.panTo(livePos);
+  }, [map, livePos]);
 
   useEffect(() => {
     if (!map || stops.length < 2) return;
@@ -83,6 +93,10 @@ export default function InteractiveMap({
   currentStopIndex,
   simulatedBusPos,
   trafficSegments,
+  liveDriverPos,
+  gpsStatus = 'idle',
+  onRequestGps,
+  onStopGps,
   onSelectStudent
 }: InteractiveMapProps) {
   const [mapViewMode, setMapViewMode] = useState<'2d' | '3d' | 'gmaps'>('2d');
@@ -243,6 +257,48 @@ export default function InteractiveMap({
           </p>
         </div>
 
+        {/* GPS Permission Button */}
+        <div className="flex items-center gap-2 shrink-0">
+          {gpsStatus === 'idle' && (
+            <button
+              onClick={onRequestGps}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-[#10B981]/10 hover:bg-[#10B981]/20 border border-[#10B981]/20 text-[#34d399] hover:text-white transition-all"
+              title="Use your live GPS location as route start"
+            >
+              <LocateFixed className="w-3.5 h-3.5" />
+              Use My Location
+            </button>
+          )}
+          {gpsStatus === 'requesting' && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-amber-500/10 border border-amber-500/20 text-amber-400">
+              <LocateFixed className="w-3.5 h-3.5 animate-pulse" />
+              Requesting GPS...
+            </span>
+          )}
+          {gpsStatus === 'active' && (
+            <button
+              onClick={onStopGps}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-emerald-500/10 hover:bg-rose-500/10 border border-emerald-500/20 hover:border-rose-500/20 text-emerald-400 hover:text-rose-400 transition-all"
+              title="Stop using live GPS"
+            >
+              <LocateFixed className="w-3.5 h-3.5 animate-pulse" />
+              GPS Live · Stop
+            </button>
+          )}
+          {gpsStatus === 'denied' && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-rose-500/10 border border-rose-500/20 text-rose-400">
+              <LocateOff className="w-3.5 h-3.5" />
+              GPS Denied
+            </span>
+          )}
+          {gpsStatus === 'unavailable' && (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-[#2A2A30] border border-[#2A2A30] text-[#8E9299]">
+              <LocateOff className="w-3.5 h-3.5" />
+              GPS Unavailable
+            </span>
+          )}
+        </div>
+
         {/* View Mode Toggle Button Group */}
         <div className="flex bg-[#0A0A0C] border border-[#2A2A30] rounded-xl p-1 shrink-0 text-[10px] font-bold">
           <button
@@ -325,7 +381,7 @@ export default function InteractiveMap({
           ) : (
             <APIProvider apiKey={API_KEY} version="weekly">
               <GoogleMap
-                defaultCenter={{ lat: 30.0935, lng: 31.3150 }}
+                defaultCenter={liveDriverPos || { lat: 30.0935, lng: 31.3150 }}
                 defaultZoom={15}
                 mapId="DEMO_MAP_ID"
                 internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
@@ -368,8 +424,20 @@ export default function InteractiveMap({
                   );
                 })}
 
+                {/* Live Driver GPS Marker */}
+                {liveDriverPos && (
+                  <AdvancedMarker position={liveDriverPos}>
+                    <div className="flex flex-col items-center">
+                      <div className="text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border border-emerald-400 bg-[#0A0A0C] shadow-lg mb-1 whitespace-nowrap">
+                        📍 You Are Here
+                      </div>
+                      <div className="w-4 h-4 rounded-full bg-emerald-400 border-2 border-white shadow-lg animate-pulse" />
+                    </div>
+                  </AdvancedMarker>
+                )}
+
                 {/* Route Line Connector */}
-                <GoogleMapRouteLine stops={routeStops} />
+                <GoogleMapRouteLine stops={routeStops} livePos={liveDriverPos} />
               </GoogleMap>
             </APIProvider>
           )}
@@ -594,6 +662,21 @@ export default function InteractiveMap({
                   </g>
                 );
               })}
+
+              {/* 5. Live Driver GPS Pin */}
+              {liveDriverPos && (() => {
+                const { x, y } = project(liveDriverPos.lat, liveDriverPos.lng);
+                return (
+                  <g>
+                    <circle cx={x} cy={y} r="16" fill="none" stroke="#10B981" strokeWidth="1.5" className="animate-ping" opacity="0.4" />
+                    <circle cx={x} cy={y} r="10" fill="#10B981" stroke="#0A0A0C" strokeWidth="2" />
+                    <circle cx={x} cy={y} r="4" fill="white" />
+                    <text x={x} y={y - 18} textAnchor="middle" className="fill-[#34d399] font-bold text-[8px] font-mono">
+                      📍 YOU
+                    </text>
+                  </g>
+                );
+              })()}
 
               {/* 5. Moving Bus Asset Icon */}
               {projectedBusPos && (

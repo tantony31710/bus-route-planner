@@ -73,6 +73,49 @@ export default function App() {
     return saved ? JSON.parse(saved) : INITIAL_STUDENTS.map(s => s.id);
   });
 
+  // Live GPS driver location state
+  const [liveDriverPos, setLiveDriverPos] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'requesting' | 'active' | 'denied' | 'unavailable'>('idle');
+  const gpsWatchRef = useRef<number | null>(null);
+
+  const requestGpsPermission = () => {
+    if (!navigator.geolocation) {
+      setGpsStatus('unavailable');
+      return;
+    }
+    setGpsStatus('requesting');
+    gpsWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        setLiveDriverPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setGpsStatus('active');
+      },
+      (err) => {
+        console.warn('GPS error:', err.message);
+        setGpsStatus(err.code === 1 ? 'denied' : 'unavailable');
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+  };
+
+  const stopGps = () => {
+    if (gpsWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+    }
+    setLiveDriverPos(null);
+    setGpsStatus('idle');
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (gpsWatchRef.current !== null) {
+        navigator.geolocation.clearWatch(gpsWatchRef.current);
+      }
+    };
+  }, []);
+
+
   // Traffic segments states (representing live delay parameters)
   const [trafficSegments, setTrafficSegments] = useState<TrafficSegment[]>([
     { id: 'selahdar', streetName: 'السلحدار', status: 'clear', delayMinutes: 0 },
@@ -117,6 +160,9 @@ export default function App() {
   const [currentStopIndex, setCurrentStopIndex] = useState(0);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulatedBusPos, setSimulatedBusPos] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Live driver GPS location
+  const { isGpsActive, liveDriverPos, requestGps, stopGps } = useLiveLocation();
 
   // Audio elements ref for alerts (using synthetic audio to bypass file issues)
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -215,7 +261,9 @@ export default function App() {
 
     if (isOptimized) {
       // Multi-Criteria Nearest Neighbor solver starting from startHub
-      let currentPos = { lat: startHub.lat, lng: startHub.lng };
+      // Use live GPS driver position as start if available, otherwise fall back to hub
+      const routeOrigin = liveDriverPos || { lat: startHub.lat, lng: startHub.lng };
+      let currentPos = { lat: routeOrigin.lat, lng: routeOrigin.lng };
       const unvisited = [...activeStudents];
 
       while (unvisited.length > 0) {
@@ -281,12 +329,17 @@ export default function App() {
 
     // 3. Assemble complete chronological timeline of stops (grouping contiguous coordinates together)
     const stops: RouteStop[] = [];
+    // Use live GPS position as start point if available
+    const routeOriginPos = liveDriverPos || { lat: startHub.lat, lng: startHub.lng };
+    const routeOriginName = liveDriverPos
+      ? `📍 Live Driver Location (${liveDriverPos.lat.toFixed(4)}, ${liveDriverPos.lng.toFixed(4)})`
+      : startHub.name;
     stops.push({
       id: 'start',
-      name: startHub.name,
+      name: routeOriginName,
       type: 'hub',
-      lat: startHub.lat,
-      lng: startHub.lng,
+      lat: routeOriginPos.lat,
+      lng: routeOriginPos.lng,
       eta: startEtaStr,
       distanceFromPrev: 0,
       durationFromPrev: 0
@@ -355,7 +408,7 @@ export default function App() {
     });
 
     return stops;
-  }, [students, startHubId, endHubId, isOptimized, routeType, manualStudentIds, trafficSegments]);
+  }, [students, startHubId, endHubId, isOptimized, routeType, manualStudentIds, trafficSegments, liveDriverPos, solverConfig]);
 
   // Aggregate stats
   const totalDistance = useMemo(() => {
@@ -652,6 +705,10 @@ export default function App() {
               currentStopIndex={currentStopIndex}
               simulatedBusPos={simulatedBusPos}
               trafficSegments={trafficSegments}
+              liveDriverPos={liveDriverPos}
+              gpsStatus={gpsStatus}
+              onRequestGps={requestGpsPermission}
+              onStopGps={stopGps}
               onSelectStudent={(id) => {
                 const s = students.find(stud => stud.id === id);
                 if (s) playSystemBeep(440, 0.1);
