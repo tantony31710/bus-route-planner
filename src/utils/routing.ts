@@ -182,10 +182,8 @@ export async function getGoogleMapsRoute(stops: Point[], apiKey: string): Promis
         travelMode: 'DRIVE',
         routingPreference: 'TRAFFIC_AWARE',
         departureTime: new Date().toISOString(),
+        optimizeWaypointOrder: true,
         computeAlternativeRoutes: false,
-        routeModifiers: {
-          optimizeWaypointOrder: true
-        },
         polylineQuality: 'HIGH_QUALITY',
         polylineEncoding: 'ENCODED_POLYLINE'
       })

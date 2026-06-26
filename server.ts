@@ -14,6 +14,7 @@ app.use(express.json());
 // Initialize Gemini client if API key is present
 let ai: GoogleGenAI | null = null;
 const apiKey = process.env.GEMINI_API_KEY;
+const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
 if (apiKey && apiKey !== "MY_GEMINI_API_KEY") {
   try {
@@ -76,7 +77,7 @@ app.post("/api/dispatch-brief", async (req, res) => {
     });
   }
 
-  const modelsToTry = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite"];
+  const modelsToTry = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"];
   let responseText = "";
   let successModel = "";
   let lastError: any = null;
