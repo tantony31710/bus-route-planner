@@ -188,12 +188,14 @@ export async function getGoogleMapsRoute(stops: Point[], apiKey: string): Promis
       })
     });
   
+    const data = await response.json();
+
     if (!response.ok) {
-      console.error('Google Maps route request failed:', response.status, response.statusText);
+      console.error('Routes API error:', response.status, response.statusText, JSON.stringify(data));
       return [];
     }
-  
-    const data = await response.json();
+
+    console.log('Routes API raw response:', JSON.stringify(data).slice(0, 500));
   
     if (data.routes && data.routes.length > 0) {
       const route = data.routes[0];
