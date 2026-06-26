@@ -312,7 +312,7 @@ export async function getHighResolutionRoutePath(
       try {
         const googleMapsPath = await getGoogleMapsRoute(stops, apiKey);
         if (googleMapsPath.length > 0) {
-          return googleMaps-Path;
+          return googleMapsPath;
         }
       } catch (error) {
         console.error("Failed to fetch route from Google Maps, falling back to offline routing.", error);
