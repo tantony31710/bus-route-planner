@@ -161,9 +161,6 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulatedBusPos, setSimulatedBusPos] = useState<{ lat: number; lng: number } | null>(null);
 
-  // Live driver GPS location
-  const { isGpsActive, liveDriverPos, requestGps, stopGps } = useLiveLocation();
-
   // Audio elements ref for alerts (using synthetic audio to bypass file issues)
   const audioCtxRef = useRef<AudioContext | null>(null);
 

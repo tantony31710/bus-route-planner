@@ -173,7 +173,7 @@ export async function getGoogleMapsRoute(stops: Point[], apiKey: string): Promis
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'routes.polyline.encodedPolyline'
+        'X-Goog-FieldMask': 'routes.polyline.encodedPolyline,routes.legs.polyline.encodedPolyline'
       },
       body: JSON.stringify({
         origin: { location: { latLng: origin } },
@@ -196,9 +196,26 @@ export async function getGoogleMapsRoute(stops: Point[], apiKey: string): Promis
     const data = await response.json();
   
     if (data.routes && data.routes.length > 0) {
-      const encodedPolyline = data.routes[0].polyline.encodedPolyline;
-      const decodedPolyline = decode(encodedPolyline).map(([lat, lng]) => ({ lat, lng }));
-      return decodedPolyline;
+      const route = data.routes[0];
+
+      // Try the top-level route polyline first (works for single-leg routes)
+      if (route.polyline?.encodedPolyline) {
+        return decode(route.polyline.encodedPolyline).map(([lat, lng]) => ({ lat, lng }));
+      }
+
+      // For multi-stop routes, stitch together each leg polyline in order
+      if (route.legs && route.legs.length > 0) {
+        const stitched: {lat: number; lng: number}[] = [];
+        for (const leg of route.legs) {
+          if (leg.polyline?.encodedPolyline) {
+            const pts = decode(leg.polyline.encodedPolyline).map(([lat, lng]) => ({ lat, lng }));
+            // Avoid duplicating the junction point between legs
+            const start = stitched.length > 0 ? 1 : 0;
+            stitched.push(...pts.slice(start));
+          }
+        }
+        if (stitched.length > 0) return stitched;
+      }
     }
   
     return [];
