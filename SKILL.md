@@ -1,5 +1,5 @@
----
-name: bus_route_planner
+###
+title: Bus Route Planner Skill
 description: Calculates optimal transit routes, schedules, and connections between stops.
 tools:
   - execute_route_calculation

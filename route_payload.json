@@ -1,0 +1,264 @@
+{
+  "origin": {
+    "location": {
+      "latLng": {
+        "latitude": 30.09,
+        "longitude": 31.31
+      }
+    }
+  },
+  "destination": {
+    "location": {
+      "latLng": {
+        "latitude": 30.0965,
+        "longitude": 31.316
+      }
+    }
+  },
+  "intermediates": [
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0942,
+          "longitude": 31.3138
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0944,
+          "longitude": 31.314
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0945,
+          "longitude": 31.3142
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0932,
+          "longitude": 31.3151
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0916,
+          "longitude": 31.3112
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0916,
+          "longitude": 31.3112
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.09198,
+          "longitude": 31.314333
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.09198,
+          "longitude": 31.314333
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.093182,
+          "longitude": 31.313541
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.093182,
+          "longitude": 31.313541
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0933,
+          "longitude": 31.3136
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.092979,
+          "longitude": 31.312038
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.092979,
+          "longitude": 31.312038
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0952,
+          "longitude": 31.3131
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.095,
+          "longitude": 31.3129
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0948,
+          "longitude": 31.3126
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0948,
+          "longitude": 31.3126
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.096,
+          "longitude": 31.3182
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0915,
+          "longitude": 31.317
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.092,
+          "longitude": 31.3185
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0928,
+          "longitude": 31.3195
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0935,
+          "longitude": 31.32
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    },
+    {
+      "location": {
+        "latLng": {
+          "latitude": 30.0935,
+          "longitude": 31.32
+        }
+      },
+      "vehicleStopover": true,
+      "sideOfRoad": true
+    }
+  ],
+  "travelMode": "DRIVE",
+  "routingPreference": "TRAFFIC_AWARE",
+  "optimizeWaypointOrder": true,
+  "computeAlternativeRoutes": false,
+  "routeModifiers": {
+    "avoidTolls": false,
+    "avoidHighways": false,
+    "avoidFerries": true
+  },
+  "polylineQuality": "HIGH_QUALITY",
+  "polylineEncoding": "ENCODED_POLYLINE",
+  "languageCode": "ar",
+  "units": "METRIC",
+  "regionCode": "EG"
+}

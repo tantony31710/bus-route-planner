@@ -2,13 +2,8 @@
   "version": 2,
   "cleanUrls": true,
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/api/compute-route",  "destination": "/api/compute_route" },
+    { "source": "/api/dispatch-brief", "destination": "/api/dispatch-brief" },
+    { "source": "/(.*)",               "destination": "/index.html" }
   ]
 }
