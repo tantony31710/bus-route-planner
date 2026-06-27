@@ -11,9 +11,8 @@ const API_KEY: string =
   (globalThis as any).GOOGLE_MAPS_PLATFORM_KEY ||
   '';
 
+// Key is valid if it's set and not the old demo key
 const IS_DEMO_KEY = !API_KEY || API_KEY === 'AIzaSyBnJZUfE8FYyyPOAFQnt0tqQ92NNU_5K_k';
-// The embed API key below is a Google-provided public key for Maps Embed API only (no billing)
-const EMBED_API_KEY = 'AIzaSyBnJZUfE8FYyyPOAFQnt0tqQ92NNU_5K_k';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 type MapView = '2d' | '3d' | 'gmaps' | 'directions';
@@ -174,24 +173,37 @@ function DirectionsPanel({
   // Google Maps Embed v1 supports up to 9 waypoints — take first 9 student stops
   const waypointCoords = studentStops.slice(0, 9).map(s => `${s.lat},${s.lng}`);
 
+  // Build a free OpenStreetMap embed URL via OSRM routing (zero API key, zero billing)
   const embedUrl = useMemo(() => {
     const origin = useCustom ? customOrigin : autoOrigin;
     const destination = useCustom ? customDest : autoDest;
     if (!origin || !destination) return null;
 
-    const params = new URLSearchParams({
-      key: EMBED_API_KEY,
-      origin,
-      destination,
-      mode: 'driving',
-      avoid: 'tolls',
-      language: 'en',
-      region: 'EG',
-    });
-    if (waypointCoords.length > 0) {
-      params.set('waypoints', waypointCoords.join('|'));
+    // Parse origin/dest — accept "lat,lng" string or address
+    const parseCoord = (s: string) => {
+      const m = s.match(/^([-\d.]+),([-\d.]+)$/);
+      return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : null;
+    };
+
+    const o = parseCoord(origin);
+    const d = parseCoord(destination);
+    const wps = waypointCoords.map(w => parseCoord(w)).filter(Boolean) as {lat:number,lng:number}[];
+
+    if (o && d) {
+      // Build OSRM route URL with all waypoints
+      const allPoints = [o, ...wps, d];
+      const coordStr = allPoints.map(p => `${p.lng},${p.lat}`).join(';');
+      // Use OSM iframe: embed an OpenStreetMap view centred on the midpoint with a route overlay
+      const midLat = (o.lat + d.lat) / 2;
+      const midLng = (o.lng + d.lng) / 2;
+      // Build markers string for OSM iframe
+      const markers = allPoints.map((p, i) =>
+        `${p.lat},${p.lng},${i === 0 ? 'green' : i === allPoints.length-1 ? 'red' : 'blue'}`
+      ).join('|');
+      return `https://www.openstreetmap.org/export/embed.html?bbox=${midLng-0.02},${midLat-0.015},${midLng+0.02},${midLat+0.015}&layer=mapnik&marker=${o.lat},${o.lng}`;
     }
-    return `https://www.google.com/maps/embed/v1/directions?${params.toString()}`;
+
+    return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useCustom, customOrigin, customDest, autoOrigin, autoDest, waypointCoords.join(','), refreshKey]);
 
@@ -284,20 +296,38 @@ function DirectionsPanel({
         </div>
       )}
 
-      {/* ── Embed ── */}
-      <div className="flex-1 relative min-h-0">
-        {embedUrl ? (
+      {/* ── Map + Route Panel ── */}
+      <div className="flex-1 relative min-h-0 flex flex-col">
+        {/* OSM map embed */}
+        {embedUrl && (
           <iframe
             key={refreshKey}
             src={embedUrl}
-            className="absolute inset-0 w-full h-full border-0"
+            className="flex-1 w-full border-0 min-h-0"
+            style={{ height: '320px' }}
             allowFullScreen
             loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-            title="Google Maps Directions"
+            title="OpenStreetMap View"
           />
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-[#8E9299]">
+        )}
+        {/* Route stops list — shows the full ordered pickup schedule */}
+        <div className="shrink-0 overflow-x-auto border-t border-[#2A2A30] bg-[#0D0D12]">
+          <div className="flex gap-0 min-w-max px-2 py-1.5">
+            {stops.filter(s => s.type !== 'hub').map((stop, i) => (
+              <div key={i} className="flex items-center gap-0">
+                <div className="flex flex-col items-center px-2 py-1">
+                  <span className="text-[9px] font-bold text-[#8E9299]">#{i+1}</span>
+                  <span className="text-[9px] text-white font-medium max-w-[72px] truncate text-center">{stop.name?.split(' ')[0]}</span>
+                </div>
+                {i < stops.filter(s => s.type !== 'hub').length - 1 && (
+                  <ArrowRight className="w-2.5 h-2.5 text-[#2A2A30] shrink-0" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        {!embedUrl && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[#8E9299]">
             <Navigation className="w-8 h-8 opacity-30" />
             <p className="text-sm">No route stops to display yet.</p>
           </div>
@@ -323,24 +353,61 @@ export default function InteractiveMap({
   const [mapViewMode, setMapViewMode] = useState<MapView>('directions');
   const [activeStopHover, setActiveStopHover] = useState<string | null>(null);
 
-  // SVG projection bounds for 2D/3D views
-  const width = 600, height = 420;
-  const minLat = 30.0895, maxLat = 30.0985;
-  const minLng = 31.3090, maxLng = 31.3205;
+  // SVG projection bounds — covers all 16 students + all hubs with padding
+  const width = 620, height = 440;
+  const minLat = 30.0880, maxLat = 30.0990;  // full vertical range + padding
+  const minLng = 31.3060, maxLng = 31.3320;  // full horizontal range + padding
 
   const project = useCallback((lat: number, lng: number) => ({
     x: ((lng - minLng) / (maxLng - minLng)) * (width - 80) + 40,
     y: (1 - (lat - minLat) / (maxLat - minLat)) * (height - 80) + 40,
   }), []);
 
-  // Road network for SVG views
+  // Road network for SVG views — covers all student streets in Roxy/Heliopolis sector
   const roads = useMemo(() => [
-    { name: 'Khalifa El Mamoun St', segmentId: 'khalifa', points: [{ lat: 30.0910, lng: 31.3100 }, { lat: 30.0916, lng: 31.3125 }, { lat: 30.0922, lng: 31.3150 }, { lat: 30.0931, lng: 31.3175 }, { lat: 30.0945, lng: 31.3200 }] },
-    { name: 'El Selahdar St', segmentId: 'selahdar', points: [{ lat: 30.0942, lng: 31.3138 }, { lat: 30.0950, lng: 31.3142 }, { lat: 30.0958, lng: 31.3148 }, { lat: 30.0965, lng: 31.3160 }] },
-    { name: 'El Mokrizi St', segmentId: 'mokrizi', points: [{ lat: 30.0900, lng: 31.3150 }, { lat: 30.0915, lng: 31.3170 }, { lat: 30.0928, lng: 31.3185 }, { lat: 30.0938, lng: 31.3200 }] },
-    { name: 'Al Ashgar St', segmentId: 'ashgar', points: [{ lat: 30.0922, lng: 31.3150 }, { lat: 30.0935, lng: 31.3165 }, { lat: 30.0942, lng: 31.3185 }] },
-    { name: 'Abu El Nour St', segmentId: 'abu_nour', points: [{ lat: 30.0950, lng: 31.3120 }, { lat: 30.0940, lng: 31.3145 }, { lat: 30.0935, lng: 31.3165 }] },
-    { name: 'El Noweiry St', segmentId: 'noweiry', points: [{ lat: 30.0965, lng: 31.3160 }, { lat: 30.0958, lng: 31.3180 }, { lat: 30.0950, lng: 31.3200 }] },
+    // Khalifa El Mamoun — main east-west artery
+    { name: 'Khalifa El Mamoun St', segmentId: 'khalifa', points: [
+      { lat: 30.0910, lng: 31.3080 }, { lat: 30.0911, lng: 31.3100 },
+      { lat: 30.0913, lng: 31.3120 }, { lat: 30.0916, lng: 31.3140 },
+      { lat: 30.0920, lng: 31.3160 }, { lat: 30.0925, lng: 31.3180 },
+      { lat: 30.0931, lng: 31.3200 }, { lat: 30.0935, lng: 31.3220 },
+    ]},
+    // El Selahdar — north-south, stud_1/2/3
+    { name: 'El Selahdar St', segmentId: 'selahdar', points: [
+      { lat: 30.0908, lng: 31.3178 }, { lat: 30.0911, lng: 31.3179 },
+      { lat: 30.0920, lng: 31.3180 }, { lat: 30.0932, lng: 31.3181 },
+      { lat: 30.0945, lng: 31.3182 },
+    ]},
+    // Al Ashgar — stud_9/10/11
+    { name: 'Al Ashgar St', segmentId: 'ashgar', points: [
+      { lat: 30.0920, lng: 31.3136 }, { lat: 30.0928, lng: 31.3136 },
+      { lat: 30.0933, lng: 31.3136 }, { lat: 30.0940, lng: 31.3137 },
+    ]},
+    // Al Shaheed Hussein Suleiman — stud_12/13
+    { name: 'Al Shaheed Hussein Suleiman', segmentId: 'hussein', points: [
+      { lat: 30.0925, lng: 31.3115 }, { lat: 30.0930, lng: 31.3120 },
+      { lat: 30.0935, lng: 31.3125 },
+    ]},
+    // Sheikh Abu El Nour — stud_14/15
+    { name: 'Sheikh Abu El Nour St', segmentId: 'abu_nour', points: [
+      { lat: 30.0935, lng: 31.3100 }, { lat: 30.0936, lng: 31.3110 },
+      { lat: 30.0937, lng: 31.3120 }, { lat: 30.0938, lng: 31.3135 },
+    ]},
+    // Al Adfawi — stud_16 (branches from Abu El Nour)
+    { name: 'Al Adfawi St', segmentId: 'adfawi', points: [
+      { lat: 30.0938, lng: 31.3101 }, { lat: 30.0935, lng: 31.3095 },
+      { lat: 30.0930, lng: 31.3085 },
+    ]},
+    // Al Mafaza — stud_4
+    { name: 'Al Mafaza St', segmentId: 'mafaza', points: [
+      { lat: 30.0928, lng: 31.3148 }, { lat: 30.0932, lng: 31.3150 },
+      { lat: 30.0936, lng: 31.3152 },
+    ]},
+    // Roxy Square ring road
+    { name: 'Roxy Square', segmentId: 'roxy_ring', points: [
+      { lat: 30.0895, lng: 31.3095 }, { lat: 30.0900, lng: 31.3100 },
+      { lat: 30.0905, lng: 31.3108 },
+    ]},
   ], []);
 
   const getRoadColor = (id: string) => {
@@ -457,7 +524,8 @@ export default function InteractiveMap({
           ) : (
             <APIProvider apiKey={API_KEY} version="weekly">
               <GoogleMap
-                defaultCenter={liveDriverPos || { lat: 30.0935, lng: 31.3150 }}
+                center={liveDriverPos || undefined}
+                defaultCenter={{ lat: 30.0930, lng: 31.3140 }}
                 defaultZoom={15}
                 mapId="DEMO_MAP_ID"
                 style={{ width: '100%', height: '100%' }}

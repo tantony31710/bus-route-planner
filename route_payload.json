@@ -23,8 +23,10 @@
           "longitude": 31.3179237
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -33,8 +35,10 @@
           "longitude": 31.3137362
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -43,8 +47,10 @@
           "longitude": 31.3142
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -53,8 +59,10 @@
           "longitude": 31.3151
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -63,8 +71,10 @@
           "longitude": 31.3112
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -73,8 +83,10 @@
           "longitude": 31.3112
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -83,8 +95,10 @@
           "longitude": 31.314333
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -93,8 +107,10 @@
           "longitude": 31.314333
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -103,8 +119,10 @@
           "longitude": 31.313541
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -113,8 +131,10 @@
           "longitude": 31.313541
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -123,8 +143,10 @@
           "longitude": 31.3136225
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -133,8 +155,10 @@
           "longitude": 31.312038
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -143,8 +167,10 @@
           "longitude": 31.312038
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -153,8 +179,10 @@
           "longitude": 31.3135076
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -163,8 +191,10 @@
           "longitude": 31.3129
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -173,8 +203,10 @@
           "longitude": 31.310119
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -183,8 +215,10 @@
           "longitude": 31.310119
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -193,8 +227,10 @@
           "longitude": 31.308075
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -203,8 +239,10 @@
           "longitude": 31.317
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -213,8 +251,10 @@
           "longitude": 31.3185
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -223,8 +263,10 @@
           "longitude": 31.3195
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -233,8 +275,10 @@
           "longitude": 31.32
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     },
     {
       "location": {
@@ -243,8 +287,10 @@
           "longitude": 31.32
         }
       },
-      "vehicleStopover": true,
-      "sideOfRoad": true
+      "vehicleModifiers": {
+        "vehicleStopover": true,
+        "sideOfRoad": true
+      }
     }
   ],
   "travelMode": "DRIVE",
