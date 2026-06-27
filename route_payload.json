@@ -19,8 +19,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.0942,
-          "longitude": 31.3138
+          "latitude": 30.0910882,
+          "longitude": 31.3179237
         }
       },
       "vehicleStopover": true,
@@ -29,8 +29,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.0944,
-          "longitude": 31.314
+          "latitude": 30.0913289,
+          "longitude": 31.3137362
         }
       },
       "vehicleStopover": true,
@@ -119,8 +119,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.0933,
-          "longitude": 31.3136
+          "latitude": 30.0931576,
+          "longitude": 31.3136225
         }
       },
       "vehicleStopover": true,
@@ -149,8 +149,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.0952,
-          "longitude": 31.3131
+          "latitude": 30.0935104,
+          "longitude": 31.3135076
         }
       },
       "vehicleStopover": true,
@@ -169,8 +169,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.0948,
-          "longitude": 31.3126
+          "latitude": 30.093851,
+          "longitude": 31.310119
         }
       },
       "vehicleStopover": true,
@@ -179,8 +179,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.0948,
-          "longitude": 31.3126
+          "latitude": 30.093851,
+          "longitude": 31.310119
         }
       },
       "vehicleStopover": true,
@@ -189,8 +189,8 @@
     {
       "location": {
         "latLng": {
-          "latitude": 30.096,
-          "longitude": 31.3182
+          "latitude": 30.0925425,
+          "longitude": 31.308075
         }
       },
       "vehicleStopover": true,
