@@ -144,7 +144,7 @@ function GoogleMapRouteLine({
   return null;
 }
 
-// ── Directions Panel (Google Maps Embed — zero billing, exact road routing) ──
+// ── Directions Panel — step-by-step OSRM navigation (Leaflet iframe, zero API key) ──
 function DirectionsPanel({
   stops,
   liveDriverPos,
@@ -152,186 +152,237 @@ function DirectionsPanel({
   stops: RouteStop[];
   liveDriverPos?: { lat: number; lng: number } | null;
 }) {
-  const [customOrigin, setCustomOrigin] = useState('');
-  const [customDest, setCustomDest] = useState('');
-  const [useCustom, setUseCustom] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [routeStarted, setRouteStarted] = useState(false);
+  const [currentLegIndex, setCurrentLegIndex] = useState(0);
 
-  const hubStops = stops.filter(s => s.type === 'hub');
-  const studentStops = stops.filter(s => s.type !== 'hub');
+  // All ordered stops (hub → pickups → hub)
+  const allStops = useMemo(() => stops, [stops]);
+  // Student-only stops for the strip
+  const studentStops = allStops.filter(s => s.type !== 'hub');
 
-  // Auto origin: live GPS > first hub
-  const autoOrigin = liveDriverPos
-    ? `${liveDriverPos.lat},${liveDriverPos.lng}`
-    : hubStops[0] ? `${hubStops[0].lat},${hubStops[0].lng}` : null;
+  // Current leg: one segment at a time to avoid road-crossing
+  const legFrom = allStops[currentLegIndex] ?? null;
+  const legTo = allStops[currentLegIndex + 1] ?? null;
+  const totalLegs = Math.max(0, allStops.length - 1);
 
-  // Auto destination: last hub
-  const autoDest = hubStops.length > 1
-    ? `${hubStops[hubStops.length - 1].lat},${hubStops[hubStops.length - 1].lng}`
-    : hubStops[0] ? `${hubStops[0].lat},${hubStops[0].lng}` : null;
+  // Full Google Maps navigation URL (opens in phone Maps app)
+  const fullNavUrl = useMemo(() => {
+    if (allStops.length < 2) return '#';
+    const waypoints = allStops.slice(1, -1).map(s => `${s.lat},${s.lng}`).join('/');
+    const o = allStops[0];
+    const d = allStops[allStops.length - 1];
+    const parts = [
+      encodeURIComponent(`${o.lat},${o.lng}`),
+      ...allStops.slice(1, -1).map(s => encodeURIComponent(`${s.lat},${s.lng}`)),
+      encodeURIComponent(`${d.lat},${d.lng}`),
+    ].join('/');
+    return `https://www.google.com/maps/dir/${parts}`;
+  }, [allStops]);
 
-  // Google Maps Embed v1 supports up to 9 waypoints — take first 9 student stops
-  const waypointCoords = studentStops.slice(0, 9).map(s => `${s.lat},${s.lng}`);
+  // Current leg Google Maps URL (for single-leg phone navigation)
+  const legNavUrl = useMemo(() => {
+    if (!legFrom || !legTo) return '#';
+    return `https://www.google.com/maps/dir/${legFrom.lat},${legFrom.lng}/${legTo.lat},${legTo.lng}`;
+  }, [legFrom, legTo]);
 
-  // Build a free OpenStreetMap embed URL via OSRM routing (zero API key, zero billing)
-  const embedUrl = useMemo(() => {
-    const origin = useCustom ? customOrigin : autoOrigin;
-    const destination = useCustom ? customDest : autoDest;
-    if (!origin || !destination) return null;
+  // Build self-contained Leaflet HTML that fetches OSRM route for ONE leg only
+  // One leg at a time = no road-crossing / median-jumping
+  const leafletHtml = useMemo(() => {
+    if (!legFrom || !legTo) return null;
+    const fromLat = legFrom.lat, fromLng = legFrom.lng;
+    const toLat = legTo.lat, toLng = legTo.lng;
+    const fromName = legFrom.name ?? 'From';
+    const toName = legTo.name ?? 'To';
+    const isStart = currentLegIndex === 0;
+    const isEnd = currentLegIndex === totalLegs - 1;
 
-    // Parse origin/dest — accept "lat,lng" string or address
-    const parseCoord = (s: string) => {
-      const m = s.match(/^([-\d.]+),([-\d.]+)$/);
-      return m ? { lat: parseFloat(m[1]), lng: parseFloat(m[2]) } : null;
+    return `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<style>
+  html,body,#map{margin:0;padding:0;width:100%;height:100%;background:#0a0a0c;}
+  .leaflet-container{background:#1a1a2e;}
+</style>
+</head><body>
+<div id="map"></div>
+<script>
+var map = L.map('map', { zoomControl: true, attributionControl: false });
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19, attribution: '© OSM'
+}).addTo(map);
+
+var fromLatLng = [${fromLat}, ${fromLng}];
+var toLatLng = [${toLat}, ${toLng}];
+
+// Markers
+var greenIcon = L.divIcon({ className: '', html: '<div style="background:#22c55e;border:2px solid white;border-radius:50%;width:14px;height:14px;box-shadow:0 0 6px rgba(0,0,0,.5)"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+var redIcon   = L.divIcon({ className: '', html: '<div style="background:#ef4444;border:2px solid white;border-radius:50%;width:14px;height:14px;box-shadow:0 0 6px rgba(0,0,0,.5)"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+
+L.marker(fromLatLng, {icon: greenIcon}).bindTooltip(${JSON.stringify(fromName)}, {permanent:true, direction:'top', offset:[0,-8], className:'leaflet-tooltip'}).addTo(map);
+L.marker(toLatLng,   {icon: redIcon  }).bindTooltip(${JSON.stringify(toName)},   {permanent:true, direction:'top', offset:[0,-8], className:'leaflet-tooltip'}).addTo(map);
+
+// Fetch OSRM route — 2 coords only, no road-crossing
+fetch('https://router.project-osrm.org/route/v1/driving/${fromLng},${fromLat};${toLng},${toLat}?overview=full&geometries=geojson')
+  .then(r => r.json())
+  .then(data => {
+    if (!data.routes || !data.routes[0]) { fallback(); return; }
+    var coords = data.routes[0].geometry.coordinates.map(function(c){ return [c[1],c[0]]; });
+    L.polyline(coords, { color:'#3b82f6', weight:5, opacity:0.9 }).addTo(map);
+    var bounds = L.latLngBounds(coords);
+    map.fitBounds(bounds, { padding:[28,28] });
+  })
+  .catch(function(){ fallback(); });
+
+function fallback() {
+  L.polyline([fromLatLng, toLatLng], { color:'#f59e0b', weight:3, dashArray:'6,6', opacity:0.8 }).addTo(map);
+  map.fitBounds(L.latLngBounds([fromLatLng, toLatLng]), { padding:[40,40] });
+}
+<\/script>
+</body></html>`;
+  }, [legFrom, legTo, currentLegIndex, totalLegs]);
+
+  const iframeSrc = useMemo(() => {
+    if (!leafletHtml) return '';
+    const blob = new Blob([leafletHtml], { type: 'text/html' });
+    return URL.createObjectURL(blob);
+  }, [leafletHtml]);
+
+  // Cleanup blob URLs on each change
+  useEffect(() => {
+    return () => {
+      if (iframeSrc) URL.revokeObjectURL(iframeSrc);
     };
+  }, [iframeSrc]);
 
-    const o = parseCoord(origin);
-    const d = parseCoord(destination);
-    const wps = waypointCoords.map(w => parseCoord(w)).filter(Boolean) as {lat:number,lng:number}[];
+  if (!routeStarted) {
+    // Pre-start screen: show all stops preview
+    return (
+      <div className="flex flex-col border border-[#2A2A30] bg-[#0A0A0C] rounded-xl overflow-hidden h-[420px]">
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-[#2A2A30] shrink-0 bg-[#0D0D12]">
+          <Navigation className="w-4 h-4 text-rose-400" />
+          <span className="text-[11px] font-bold text-white">Directions</span>
+          <span className="text-[10px] text-[#8E9299] ml-1">— {allStops.length} stops</span>
+          <div className="flex-1" />
+          <a href={fullNavUrl} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all">
+            <ExternalLink className="w-3 h-3" /> Full Route
+          </a>
+        </div>
+        {/* Stop list preview */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
+          {allStops.map((stop, i) => (
+            <div key={stop.id} className="flex items-center gap-2 py-1">
+              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                stop.type === 'hub' ? 'bg-rose-500/20 text-rose-300' : 'bg-blue-500/20 text-blue-300'
+              }`}>{i + 1}</span>
+              <span className="text-[11px] text-white truncate flex-1">{stop.name}</span>
+              {stop.eta && <span className="text-[10px] text-[#8E9299] shrink-0">{stop.eta}</span>}
+            </div>
+          ))}
+        </div>
+        <div className="px-3 py-3 border-t border-[#2A2A30] shrink-0">
+          <button
+            onClick={() => { setCurrentLegIndex(0); setRouteStarted(true); }}
+            disabled={allStops.length < 2}
+            className="w-full py-2.5 rounded-xl text-[12px] font-bold bg-rose-500 hover:bg-rose-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all flex items-center justify-center gap-2"
+          >
+            <Navigation className="w-4 h-4" /> START ROUTE
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-    if (o && d) {
-      // Build OSRM route URL with all waypoints
-      const allPoints = [o, ...wps, d];
-      const coordStr = allPoints.map(p => `${p.lng},${p.lat}`).join(';');
-      // Use OSM iframe: embed an OpenStreetMap view centred on the midpoint with a route overlay
-      const midLat = (o.lat + d.lat) / 2;
-      const midLng = (o.lng + d.lng) / 2;
-      // Build markers string for OSM iframe
-      const markers = allPoints.map((p, i) =>
-        `${p.lat},${p.lng},${i === 0 ? 'green' : i === allPoints.length-1 ? 'red' : 'blue'}`
-      ).join('|');
-      return `https://www.openstreetmap.org/export/embed.html?bbox=${midLng-0.02},${midLat-0.015},${midLng+0.02},${midLat+0.015}&layer=mapnik&marker=${o.lat},${o.lng}`;
-    }
-
-    return null;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useCustom, customOrigin, customDest, autoOrigin, autoDest, waypointCoords.join(','), refreshKey]);
-
-  // Full Google Maps navigation URL (opens in app/browser with all waypoints)
-  const navUrl = useMemo(() => {
-    const origin = useCustom ? customOrigin : autoOrigin;
-    const destination = useCustom ? customDest : autoDest;
-    if (!origin || !destination) return '#';
-    // Build dir URL: /maps/dir/origin/wp1/wp2/.../destination
-    const allParts = [origin, ...waypointCoords, destination]
-      .map(p => encodeURIComponent(p))
-      .join('/');
-    return `https://www.google.com/maps/dir/${allParts}`;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useCustom, customOrigin, customDest, autoOrigin, autoDest, waypointCoords.join(',')]);
-
+  // Active navigation screen
   return (
     <div className="flex flex-col border border-[#2A2A30] bg-[#0A0A0C] rounded-xl overflow-hidden h-[420px]">
-      {/* ── Controls ── */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#2A2A30] flex-wrap shrink-0 bg-[#0D0D12]">
+      {/* Header with progress */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-[#2A2A30] shrink-0 bg-[#0D0D12]">
         <button
-          onClick={() => setUseCustom(false)}
-          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-            !useCustom
-              ? 'bg-rose-500/20 border-rose-500/40 text-rose-300'
-              : 'bg-[#1A1A1F] border-[#2A2A30] text-[#8E9299] hover:text-white'
-          }`}
-        >
-          🚌 Auto ({studentStops.length} stops)
-        </button>
-        <button
-          onClick={() => setUseCustom(true)}
-          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
-            useCustom
-              ? 'bg-blue-500/20 border-blue-500/40 text-blue-300'
-              : 'bg-[#1A1A1F] border-[#2A2A30] text-[#8E9299] hover:text-white'
-          }`}
-        >
-          ✏️ Custom
-        </button>
-        <button
-          onClick={() => setRefreshKey(k => k + 1)}
-          className="p-1.5 rounded-lg bg-[#1A1A1F] border border-[#2A2A30] text-[#8E9299] hover:text-white transition-all"
-          title="Refresh map"
-        >
-          <RefreshCw className="w-3 h-3" />
-        </button>
-        <div className="flex-1" />
-        <a
-          href={navUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all"
-        >
-          <ExternalLink className="w-3 h-3" />
-          Open in Google Maps
+          onClick={() => setRouteStarted(false)}
+          className="p-1 rounded-lg bg-[#1A1A1F] border border-[#2A2A30] text-[#8E9299] hover:text-white transition-all text-[10px]"
+        >✕</button>
+        <span className="text-[11px] font-bold text-white truncate flex-1">
+          {legFrom?.name} → {legTo?.name}
+        </span>
+        <span className="text-[10px] text-[#8E9299] shrink-0">
+          {currentLegIndex + 1}/{totalLegs}
+        </span>
+        <a href={legNavUrl} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold bg-blue-500/10 border border-blue-500/20 text-blue-400 hover:bg-blue-500/20 transition-all shrink-0">
+          <Navigation className="w-3 h-3" /> Navigate
+        </a>
+        <a href={fullNavUrl} target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-bold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 transition-all shrink-0">
+          <ExternalLink className="w-3 h-3" /> Full Route
         </a>
       </div>
 
-      {/* ── Custom inputs ── */}
-      {useCustom && (
-        <div className="flex gap-2 px-3 py-2 border-b border-[#2A2A30] shrink-0 bg-[#0D0D12]">
-          <input
-            type="text"
-            placeholder="Origin — address or lat,lng"
-            value={customOrigin}
-            onChange={e => setCustomOrigin(e.target.value)}
-            className="flex-1 bg-[#1A1A1F] border border-[#2A2A30] rounded-lg px-3 py-1.5 text-xs text-white placeholder-[#4A4A55] focus:outline-none focus:border-blue-500"
-          />
-          <input
-            type="text"
-            placeholder="Destination — address or lat,lng"
-            value={customDest}
-            onChange={e => setCustomDest(e.target.value)}
-            className="flex-1 bg-[#1A1A1F] border border-[#2A2A30] rounded-lg px-3 py-1.5 text-xs text-white placeholder-[#4A4A55] focus:outline-none focus:border-blue-500"
-          />
-          <button
-            onClick={() => setRefreshKey(k => k + 1)}
-            className="px-4 py-1.5 rounded-lg text-[10px] font-bold bg-blue-500 hover:bg-blue-600 text-white transition-all"
-          >
-            Go
-          </button>
-        </div>
-      )}
-
-      {/* ── Stop count notice if > 9 waypoints ── */}
-      {!useCustom && studentStops.length > 9 && (
-        <div className="px-3 py-1.5 text-[10px] text-amber-400 bg-amber-500/5 border-b border-[#2A2A30] shrink-0">
-          ⚠️ Showing first 9 of {studentStops.length} stops in embedded view. Tap "Open in Google Maps" for full route navigation.
-        </div>
-      )}
-
-      {/* ── Map + Route Panel ── */}
-      <div className="flex-1 relative min-h-0 flex flex-col">
-        {/* OSM map embed */}
-        {embedUrl && (
+      {/* Map iframe — Leaflet + OSRM single-leg */}
+      <div className="flex-1 relative min-h-0">
+        {iframeSrc ? (
           <iframe
-            key={refreshKey}
-            src={embedUrl}
-            className="flex-1 w-full border-0 min-h-0"
-            style={{ height: '320px' }}
-            allowFullScreen
-            loading="lazy"
-            title="OpenStreetMap View"
+            key={iframeSrc}
+            src={iframeSrc}
+            className="w-full h-full border-0"
+            title="Route Leg Map"
+            sandbox="allow-scripts allow-same-origin"
           />
-        )}
-        {/* Route stops list — shows the full ordered pickup schedule */}
-        <div className="shrink-0 overflow-x-auto border-t border-[#2A2A30] bg-[#0D0D12]">
-          <div className="flex gap-0 min-w-max px-2 py-1.5">
-            {stops.filter(s => s.type !== 'hub').map((stop, i) => (
-              <div key={i} className="flex items-center gap-0">
-                <div className="flex flex-col items-center px-2 py-1">
-                  <span className="text-[9px] font-bold text-[#8E9299]">#{i+1}</span>
-                  <span className="text-[9px] text-white font-medium max-w-[72px] truncate text-center">{stop.name?.split(' ')[0]}</span>
-                </div>
-                {i < stops.filter(s => s.type !== 'hub').length - 1 && (
-                  <ArrowRight className="w-2.5 h-2.5 text-[#2A2A30] shrink-0" />
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-        {!embedUrl && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-[#8E9299]">
+        ) : (
+          <div className="flex items-center justify-center h-full text-[#8E9299]">
             <Navigation className="w-8 h-8 opacity-30" />
-            <p className="text-sm">No route stops to display yet.</p>
           </div>
         )}
+      </div>
+
+      {/* Progress dots */}
+      <div className="flex items-center justify-center gap-1 py-1.5 shrink-0 border-t border-[#2A2A30] bg-[#0D0D12]">
+        {Array.from({ length: totalLegs }).map((_, i) => (
+          <div key={i} onClick={() => setCurrentLegIndex(i)}
+            className={`rounded-full cursor-pointer transition-all ${
+              i === currentLegIndex ? 'w-4 h-2 bg-rose-500' : i < currentLegIndex ? 'w-2 h-2 bg-emerald-500' : 'w-2 h-2 bg-[#2A2A30]'
+            }`} />
+        ))}
+      </div>
+
+      {/* PREV / NEXT controls */}
+      <div className="flex gap-2 px-3 py-2 shrink-0 border-t border-[#2A2A30] bg-[#0D0D12]">
+        <button
+          onClick={() => setCurrentLegIndex(i => Math.max(0, i - 1))}
+          disabled={currentLegIndex === 0}
+          className="flex-1 py-2 rounded-xl text-[11px] font-bold bg-[#1A1A1F] border border-[#2A2A30] text-[#8E9299] hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+        >← PREV</button>
+        {currentLegIndex < totalLegs - 1 ? (
+          <button
+            onClick={() => setCurrentLegIndex(i => Math.min(totalLegs - 1, i + 1))}
+            className="flex-1 py-2 rounded-xl text-[11px] font-bold bg-rose-500 hover:bg-rose-600 text-white transition-all"
+          >NEXT →</button>
+        ) : (
+          <button
+            onClick={() => { setRouteStarted(false); setCurrentLegIndex(0); }}
+            className="flex-1 py-2 rounded-xl text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white transition-all"
+          >✓ Done</button>
+        )}
+      </div>
+
+      {/* Stop strip at bottom */}
+      <div className="shrink-0 overflow-x-auto border-t border-[#2A2A30] bg-[#0A0A0C]">
+        <div className="flex gap-0 min-w-max px-2 py-1">
+          {studentStops.map((stop, i) => (
+            <div key={i} className="flex items-center gap-0">
+              <div className="flex flex-col items-center px-1.5 py-0.5">
+                <span className="text-[8px] font-bold text-[#8E9299]">#{i+1}</span>
+                <span className="text-[8px] text-white font-medium max-w-[60px] truncate text-center">{stop.name?.split(' ')[0]}</span>
+              </div>
+              {i < studentStops.length - 1 && (
+                <ArrowRight className="w-2 h-2 text-[#2A2A30] shrink-0" />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
