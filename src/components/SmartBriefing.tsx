@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student, DelayAlert, RouteStop } from '../types';
-import { Sparkles, RefreshCw, Cpu, CheckCircle2, AlertCircle, Download } from 'lucide-react';
+import { Sparkles, RefreshCw, CheckCircle2, AlertCircle, Download } from 'lucide-react';
 
 interface SmartBriefingProps {
   students: Student[];
@@ -30,6 +30,22 @@ export default function SmartBriefing({
   const [error, setError] = useState<string | null>(null);
   const [isRealAI, setIsRealAI] = useState(false);
   const [hasKeyButFailed, setHasKeyButFailed] = useState(false);
+
+  // Typewriter effect
+  const [displayedBrief, setDisplayedBrief] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  useEffect(() => {
+    if (!brief) return;
+    setDisplayedBrief('');
+    setIsTyping(true);
+    let i = 0;
+    const timer = setInterval(() => {
+      setDisplayedBrief(brief.slice(0, i + 1));
+      i++;
+      if (i >= brief.length) { clearInterval(timer); setIsTyping(false); }
+    }, 22);
+    return () => clearInterval(timer);
+  }, [brief]);
 
   // Group classrooms
   const buildingBreakdown = students.reduce((acc: { [key: string]: number }, stud) => {
@@ -116,7 +132,9 @@ export default function SmartBriefing({
   };
 
   return (
-    <div className="bg-gradient-to-br from-[#121217] to-[#1A1A1E] text-white rounded-2xl p-5 shadow-xl border border-[#2A2A30] relative overflow-hidden" id="smart-brief-container">
+    <div className={`bg-gradient-to-br from-[#121217] to-[#1A1A1E] text-white rounded-2xl p-5 shadow-xl relative overflow-hidden border ${isRealAI ? 'border-[#3B82F6]/40 animate-glow-pulse shadow-lg shadow-blue-500/10' : 'border-[#2A2A30]'}`} id="smart-brief-container">
+      {/* Gradient top edge for live AI */}
+      {isRealAI && <div className="absolute h-px top-0 inset-x-0 bg-gradient-to-r from-transparent via-[#3B82F6]/60 to-transparent" />}
       {/* Decorative ambient blobs */}
       <div className="absolute top-0 right-0 w-32 h-32 bg-[#3B82F6]/5 rounded-full blur-2xl"></div>
       <div className="absolute bottom-0 left-0 w-24 h-24 bg-[#10B981]/5 rounded-full blur-xl"></div>
@@ -129,7 +147,14 @@ export default function SmartBriefing({
           <div>
             <h2 className="text-xs font-bold uppercase tracking-widest text-[#3B82F6] flex items-center gap-1.5 font-display">
               Smart Dispatch Co-pilot
-              <span className="text-[9px] bg-[#3B82F6]/10 px-2 py-0.5 rounded-full border border-[#3B82F6]/20 text-[#3B82F6] font-mono lowercase">Gemini powered</span>
+              {isRealAI ? (
+                <span className="text-[9px] bg-[#10B981]/10 px-2 py-0.5 rounded-full border border-[#10B981]/20 text-[#10B981] font-mono lowercase flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse inline-block" />
+                  Live AI
+                </span>
+              ) : (
+                <span className="text-[9px] bg-[#3B82F6]/10 px-2 py-0.5 rounded-full border border-[#3B82F6]/20 text-[#3B82F6] font-mono lowercase">Gemini powered</span>
+              )}
             </h2>
             <p className="text-[11px] text-[#8E9299]">
               Live AI-driven traffic synthesis & classroom drop scheduling
@@ -152,16 +177,21 @@ export default function SmartBriefing({
             className="p-1.5 rounded-lg hover:bg-[#1A1A1E] text-[#8E9299] hover:text-[#F0F0F0] border border-transparent hover:border-[#2A2A30] transition-all disabled:opacity-40"
             title="Regenerate Advice"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 transition-transform duration-500 hover:rotate-180 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
       <div className="relative bg-[#0A0A0C]/50 border border-[#2A2A30] rounded-xl p-4 min-h-[90px] flex items-center">
         {isLoading ? (
-          <div className="w-full flex items-center justify-center gap-2.5 py-4 text-xs font-semibold text-[#8E9299]">
-            <Cpu className="w-4 h-4 animate-spin text-[#3B82F6]" />
-            Synthesizing traffic vectors & drop sequences...
+          <div className='flex flex-col items-center justify-center gap-3 py-6 w-full'>
+            <div className='flex gap-1.5'>
+              {[0,1,2,3,4].map(i => (
+                <div key={i} className='w-2 h-2 rounded-full bg-[#3B82F6] animate-neural-pulse'
+                  style={{ animationDelay: `${i * 0.15}s` }} />
+              ))}
+            </div>
+            <p className='text-[11px] text-[#8E9299] font-mono animate-pulse'>Synthesizing route intelligence...</p>
           </div>
         ) : error ? (
           <div className="text-rose-400 text-xs font-medium flex items-start gap-2 py-2">
@@ -171,7 +201,7 @@ export default function SmartBriefing({
         ) : (
           <div className="space-y-2 w-full">
             <p className="text-xs sm:text-sm font-sans leading-relaxed text-[#F0F0F0]">
-              {brief}
+              {displayedBrief}{isTyping && <span className='animate-pulse font-mono text-[#3B82F6]'>|</span>}
             </p>
             {isRealAI ? (
               <div className="flex items-center gap-1.5 text-[10px] text-[#10B981] font-mono">

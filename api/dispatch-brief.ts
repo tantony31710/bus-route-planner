@@ -5,6 +5,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Cache-Control', 'no-store');
+
+  // Request body size limit
+  const bodyStr = JSON.stringify(req.body);
+  if (bodyStr.length > 8000) {
+    return res.status(413).json({ error: 'Request payload too large' });
+  }
+
   const {
     startHubName,
     endHubName,
@@ -19,7 +30,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     temperature
   } = req.body;
 
-  const fallbackBrief = `Roxy Dispatch Co-pilot status: Route is scheduled from ${startHubName || 'Roxy Square'} to ${endHubName || 'St. Mary Church Complex'} with ${boardedCount || 0} students onboard. Due to congestion on Khalifa El Mamoun, we suggest taking El Selahdar St and prioritizing dropping off KG students at the Anba Hadra building first, followed by Anba Wanas. Live navigation and traffic trackers are active to ensure an efficient trip.`;
+  // Input validation & sanitization
+  const MAX_STRING_LENGTH = 500;
+  const sanitizeStr = (s: any, maxLen = MAX_STRING_LENGTH): string => {
+    if (typeof s !== 'string') return '';
+    return s.replace(/<[^>]*>/g, '').replace(/[<>"'`]/g, '').trim().slice(0, maxLen);
+  };
+  const sanitizeNum = (n: any, min = 0, max = 9999): number => {
+    const parsed = parseFloat(n);
+    return isNaN(parsed) ? 0 : Math.min(max, Math.max(min, parsed));
+  };
+
+  const safeStartHub = sanitizeStr(startHubName);
+  const safeEndHub = sanitizeStr(endHubName);
+  const safeDist = sanitizeNum(totalDistance, 0, 200);
+  const safeDuration = sanitizeNum(totalDuration, 0, 480);
+  const safeBoarded = sanitizeNum(boardedCount, 0, 100);
+  const safeWaiting = sanitizeNum(waitingCount, 0, 100);
+  const safeAbsent = sanitizeNum(absentCount, 0, 100);
+  const safeTemp = sanitizeNum(temperature, 0, 1);
+
+  const safeAlerts = Array.isArray(activeAlerts)
+    ? activeAlerts.slice(0, 10).map((a: any) => ({
+        streetName: sanitizeStr(a?.streetName, 100),
+        severity: ['moderate', 'severe'].includes(a?.severity) ? a.severity : 'moderate',
+        message: sanitizeStr(a?.message, 200)
+      }))
+    : [];
+
+  const fallbackBrief = `Roxy Dispatch Co-pilot status: Route is scheduled from ${safeStartHub || 'Roxy Square'} to ${safeEndHub || 'St. Mary Church Complex'} with ${safeBoarded || 0} students onboard. Due to congestion on Khalifa El Mamoun, we suggest taking El Selahdar St and prioritizing dropping off KG students at the Anba Hadra building first, followed by Anba Wanas. Live navigation and traffic trackers are active to ensure an efficient trip.`;
 
   const systemPrompt = customSystemPrompt || "You are the 'Roxy Smart School Bus Dispatch Co-pilot' for Heliopolis Cairo school routes.";
 

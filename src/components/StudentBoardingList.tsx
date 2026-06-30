@@ -44,6 +44,18 @@ export default function StudentBoardingList({
     return matchesSearch && matchesBuilding && matchesStatus;
   });
 
+  // Attendance progress ring computation
+  const boardedPct = Math.round((students.filter(s => s.boardingStatus === 'boarded' || s.boardingStatus === 'arrived').length / Math.max(1, students.length - students.filter(s => s.boardingStatus === 'absent').length)) * 100);
+  const ringColor = boardedPct >= 80 ? '#10B981' : boardedPct >= 50 ? '#F59E0B' : '#EF4444';
+  const ringCircumference = 125.66;
+  const ringOffset = ringCircumference - (boardedPct / 100) * ringCircumference;
+
+  // Stats counters for summary badges
+  const waiting = students.filter(s => s.boardingStatus === 'waiting').length;
+  const boarded = students.filter(s => s.boardingStatus === 'boarded').length;
+  const arrived = students.filter(s => s.boardingStatus === 'arrived').length;
+  const absent  = students.filter(s => s.boardingStatus === 'absent').length;
+
   // Handle saving the current boarding state to historical log
   const handleArchiveAttendance = () => {
     const boardedCount = students.filter(s => s.boardingStatus === 'boarded' || s.boardingStatus === 'arrived').length;
@@ -102,14 +114,41 @@ export default function StudentBoardingList({
   return (
     <div className="bg-[#121217] rounded-2xl border border-[#2A2A30] p-5 shadow-xl shadow-black/10" id="boarding-list-container">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-base font-bold text-[#F0F0F0] flex items-center gap-2 uppercase tracking-wide font-display">
-            <User className="w-5 h-5 text-[#3B82F6]" />
-            Teacher Attendance Boarding Desk
-          </h2>
-          <p className="text-xs text-[#8E9299]">
-            Monitor real-time student presence, trigger boarding check-ins & archive trip logs
-          </p>
+        <div className="flex items-center gap-4">
+          {/* Attendance Progress Ring */}
+          <div className="relative flex-shrink-0" title={`${boardedPct}% boarded`}>
+            <svg width="52" height="52" viewBox="0 0 52 52">
+              {/* Track */}
+              <circle cx="26" cy="26" r="20" fill="none" stroke="#2A2A30" strokeWidth="5" />
+              {/* Progress arc */}
+              <circle
+                cx="26" cy="26" r="20"
+                fill="none"
+                stroke={ringColor}
+                strokeWidth="5"
+                strokeLinecap="round"
+                strokeDasharray={ringCircumference}
+                strokeDashoffset={ringOffset}
+                style={{ transition: 'stroke-dashoffset 0.6s ease, stroke 0.4s ease', transformOrigin: '26px 26px', transform: 'rotate(-90deg)' }}
+              />
+            </svg>
+            <span
+              className="absolute inset-0 flex items-center justify-center text-[10px] font-bold font-mono"
+              style={{ color: ringColor }}
+            >
+              {boardedPct}%
+            </span>
+          </div>
+
+          <div>
+            <h2 className="text-base font-bold text-[#F0F0F0] flex items-center gap-2 uppercase tracking-wide font-display">
+              <User className="w-5 h-5 text-[#3B82F6]" />
+              Teacher Attendance Boarding Desk
+            </h2>
+            <p className="text-xs text-[#8E9299]">
+              Monitor real-time student presence, trigger boarding check-ins & archive trip logs
+            </p>
+          </div>
         </div>
 
         {/* View Archive vs Active Desk Toggle */}
@@ -139,7 +178,7 @@ export default function StudentBoardingList({
       </div>
 
       {logSuccessMsg && (
-        <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 text-xs font-bold animate-pulse flex items-center gap-2">
+        <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 border-l-4 border-l-emerald-500 rounded-xl text-emerald-400 text-xs font-bold animate-bounce-in flex items-center gap-2">
           <Check className="w-4 h-4" />
           {logSuccessMsg}
         </div>
@@ -285,6 +324,22 @@ export default function StudentBoardingList({
             </div>
           </div>
 
+          {/* Mini stats summary row */}
+          <div className="flex gap-3 mb-3 flex-wrap">
+            <span className="animate-bounce-in px-2.5 py-1 rounded-lg text-[11px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 [animation-delay:0.05s] opacity-0 [animation-fill-mode:forwards]">
+              ⏳ {waiting} Waiting
+            </span>
+            <span className="animate-bounce-in px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20 [animation-delay:0.1s] opacity-0 [animation-fill-mode:forwards]">
+              🚌 {boarded} Boarded
+            </span>
+            <span className="animate-bounce-in px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 [animation-delay:0.15s] opacity-0 [animation-fill-mode:forwards]">
+              ✅ {arrived} Arrived
+            </span>
+            <span className="animate-bounce-in px-2.5 py-1 rounded-lg text-[11px] font-bold bg-rose-500/10 text-rose-400 border border-rose-500/20 [animation-delay:0.2s] opacity-0 [animation-fill-mode:forwards]">
+              ❌ {absent} Absent
+            </span>
+          </div>
+
           {/* Students list table / stack cards */}
           <div className="overflow-x-auto border border-[#2A2A30] rounded-xl bg-[#0A0A0C]">
             <table className="min-w-full divide-y divide-[#2A2A30] text-left">
@@ -306,12 +361,16 @@ export default function StudentBoardingList({
                     </td>
                   </tr>
                 ) : (
-                  filteredStudents.map((student) => {
+                  filteredStudents.map((student, index) => {
                     const activeIndex = activeRouteIds.indexOf(student.id);
                     const showSeq = activeIndex !== -1 ? activeIndex + 1 : student.order;
 
                     return (
-                      <tr key={student.id} className="hover:bg-[#121217] transition-colors text-[#F0F0F0] font-sans text-xs">
+                      <tr
+                        key={student.id}
+                        className="hover:bg-[#121217] transition-colors text-[#F0F0F0] font-sans text-xs animate-slide-up opacity-0 [animation-fill-mode:forwards]"
+                        style={{ animationDelay: `${index * 0.04}s` }}
+                      >
                         {/* Seq */}
                         <td className="px-4 py-3 whitespace-nowrap text-center">
                           <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg font-mono text-xs font-bold ${
@@ -396,7 +455,7 @@ export default function StudentBoardingList({
                               <>
                                 <button
                                   onClick={() => onUpdateStatus(student.id, 'boarded')}
-                                  className="px-2.5 py-1 text-xs font-semibold bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/20 border border-[#3B82F6]/20 rounded-lg transition-all flex items-center gap-1"
+                                  className="px-2.5 py-1 text-xs font-semibold bg-[#3B82F6]/10 text-[#3B82F6] hover:bg-[#3B82F6]/20 border border-[#3B82F6]/20 rounded-lg transition-all hover:scale-105 active:scale-95 transition-transform flex items-center gap-1"
                                 >
                                   <Check className="w-3.5 h-3.5" /> Check-In
                                 </button>
@@ -410,7 +469,7 @@ export default function StudentBoardingList({
                             )}
 
                             {student.boardingStatus === 'boarded' && (
-                              <>
+                              <span key={`boarded-${student.id}`} className="animate-bounce-in opacity-0 [animation-fill-mode:forwards] flex items-center gap-1.5">
                                 <button
                                   onClick={() => onUpdateStatus(student.id, 'arrived')}
                                   className="px-2.5 py-1 text-xs font-semibold bg-[#10B981]/10 text-[#10B981] hover:bg-[#10B981]/20 border border-[#10B981]/20 rounded-lg transition-all flex items-center gap-1"
@@ -424,17 +483,17 @@ export default function StudentBoardingList({
                                 >
                                   <X className="w-3.5 h-3.5" />
                                 </button>
-                              </>
+                              </span>
                             )}
 
                             {student.boardingStatus === 'arrived' && (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 rounded-lg">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-[#10B981]/10 text-[#10B981] border border-[#10B981]/20 rounded-lg glow-green animate-fade-in">
                                 <ShieldCheck className="w-3.5 h-3.5" /> Handed Over
                               </span>
                             )}
 
                             {student.boardingStatus === 'absent' && (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold bg-[#4A4A52]/20 text-[#8E9299] border border-[#2A2A30] rounded-lg">
+                              <span className="animate-shake inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold bg-[#4A4A52]/20 text-[#8E9299] border border-[#2A2A30] rounded-lg">
                                 ❌ Absent
                                 <button
                                   onClick={() => onUpdateStatus(student.id, 'waiting')}

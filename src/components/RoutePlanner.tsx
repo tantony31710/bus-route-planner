@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Student, RouteStop } from '../types';
 import { START_HUBS, END_HUBS } from '../data/students';
-import { Navigation, Compass, Play, Square, RotateCcw, Zap, ArrowDown, MoveUp, MoveDown, MapPin } from 'lucide-react';
+import { Navigation, Compass, Clock, Play, Square, RotateCcw, Zap, MoveUp, MoveDown, MapPin, CheckCircle2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface RoutePlannerProps {
@@ -48,9 +48,16 @@ export default function RoutePlanner({
 
   const selectedStart = START_HUBS.find(h => h.id === startHubId) || START_HUBS[0];
   const selectedEnd = END_HUBS.find(h => h.id === endHubId) || END_HUBS[0];
+  const [rippleActive, setRippleActive] = useState(false);
+
+  const handleStartSimulation = () => {
+    setRippleActive(true);
+    setTimeout(() => setRippleActive(false), 600);
+    onStartSimulation();
+  };
 
   return (
-    <div className="bg-[#121217] rounded-2xl border border-[#2A2A30] p-5 shadow-xl shadow-black/10" id="route-planner-panel">
+    <div className="bg-[#121217] rounded-2xl border border-[#2A2A30] p-5 shadow-xl shadow-black/10 animate-slide-up stagger-2" id="route-planner-panel">
       <div className="mb-5">
         <h2 className="text-base font-bold text-[#F0F0F0] flex items-center gap-2 uppercase tracking-wide font-display">
           <Navigation className="w-5 h-5 text-[#3B82F6]" />
@@ -170,39 +177,53 @@ export default function RoutePlanner({
       </div>
 
       {/* Trip Statistics */}
-      <div className="grid grid-cols-3 gap-3 p-4 bg-[#1A1A1E]/60 rounded-2xl border border-[#2A2A30] mb-5 text-center">
-        <div>
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {/* Distance Card */}
+        <div className="transform-gpu hover:scale-105 hover:-translate-y-1 transition-all duration-300 flex flex-col items-center text-center p-4 bg-gradient-to-br from-[#1E2230] to-[#141420] rounded-2xl border border-[#2A2A30] border-b-2 border-b-[#3B82F6] shadow-lg shadow-blue-500/10">
+          <Compass className="w-4 h-4 text-[#3B82F6] mb-1.5" />
           <div className="text-[9px] uppercase font-bold text-[#8E9299] tracking-wider">Total Distance</div>
-          <div className="text-base font-black text-[#F0F0F0] font-mono mt-0.5">{totalDistance.toFixed(2)} <span className="text-[10px] font-medium text-[#8E9299]">km</span></div>
+          <div className="text-base font-black text-[#F0F0F0] font-mono mt-0.5 tabular-nums">{totalDistance.toFixed(2)} <span className="text-[10px] font-medium text-[#8E9299]">km</span></div>
         </div>
-        <div>
+        {/* Duration Card */}
+        <div className="transform-gpu hover:scale-105 hover:-translate-y-1 transition-all duration-300 flex flex-col items-center text-center p-4 bg-gradient-to-br from-[#221E14] to-[#141410] rounded-2xl border border-[#2A2A30] border-b-2 border-b-amber-500 shadow-lg shadow-amber-500/10">
+          <Clock className="w-4 h-4 text-amber-500 mb-1.5" />
           <div className="text-[9px] uppercase font-bold text-[#8E9299] tracking-wider">Est. Trip Duration</div>
-          <div className="text-base font-black text-[#F0F0F0] font-mono mt-0.5">{totalDuration.toFixed(0)} <span className="text-[10px] font-medium text-[#8E9299]">min</span></div>
+          <div className="text-base font-black text-[#F0F0F0] font-mono mt-0.5 tabular-nums">{totalDuration.toFixed(0)} <span className="text-[10px] font-medium text-[#8E9299]">min</span></div>
         </div>
-        <div>
+        {/* Stops Card */}
+        <div className="transform-gpu hover:scale-105 hover:-translate-y-1 transition-all duration-300 flex flex-col items-center text-center p-4 bg-gradient-to-br from-[#142018] to-[#101410] rounded-2xl border border-[#2A2A30] border-b-2 border-b-emerald-500 shadow-lg shadow-emerald-500/10">
+          <MapPin className="w-4 h-4 text-emerald-500 mb-1.5" />
           <div className="text-[9px] uppercase font-bold text-[#8E9299] tracking-wider">Active Stops</div>
-          <div className="text-base font-black text-[#F0F0F0] font-mono mt-0.5">{routeStops.length} <span className="text-[10px] font-medium text-[#8E9299]">nodes</span></div>
+          <div className="text-base font-black text-[#F0F0F0] font-mono mt-0.5 tabular-nums">{routeStops.length} <span className="text-[10px] font-medium text-[#8E9299]">nodes</span></div>
         </div>
       </div>
 
       {/* Simulation Controllers */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         {!isSimulating ? (
-          <button
-            onClick={onStartSimulation}
-            className="flex-1 min-w-[140px] py-2.5 px-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white text-xs font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2"
-          >
-            <Play className="w-4 h-4 fill-white" />
-            Start Run Simulation
-          </button>
+          <div className="flex-1 min-w-[140px] relative">
+            <button
+              onClick={handleStartSimulation}
+              className="w-full py-2.5 px-4 bg-[#3B82F6] hover:bg-[#2563EB] text-white text-xs font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 overflow-hidden relative"
+            >
+              <Play className="w-4 h-4 fill-white" />
+              Start Run Simulation
+              {rippleActive && (
+                <span className="absolute inset-0 bg-white/10 rounded-xl animate-ripple" />
+              )}
+            </button>
+          </div>
         ) : (
-          <button
-            onClick={onStopSimulation}
-            className="flex-1 min-w-[140px] py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 animate-pulse"
-          >
-            <Square className="w-4 h-4 fill-white" />
-            Pause Simulation
-          </button>
+          <div className="flex-1 min-w-[140px] relative">
+            <span className="absolute inset-0 rounded-xl ring-2 ring-rose-500/60 animate-ping pointer-events-none" />
+            <button
+              onClick={onStopSimulation}
+              className="w-full py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg flex items-center justify-center gap-2 animate-pulse overflow-hidden relative"
+            >
+              <Square className="w-4 h-4 fill-white" />
+              Pause Simulation
+            </button>
+          </div>
         )}
         <button
           onClick={onResetSimulation}
@@ -234,14 +255,19 @@ export default function RoutePlanner({
                 className="space-y-1"
               >
                 <div
-                  className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                  className={`relative flex items-center justify-between p-3 rounded-xl border transition-all ${
                     isCurrent
-                      ? 'bg-[#3B82F6]/10 border-[#3B82F6]/40 ring-1 ring-[#3B82F6]/20'
+                      ? 'bg-[#3B82F6]/10 border-[#3B82F6]/40 ring-1 ring-[#3B82F6]/20 border-l-4 border-l-[#3B82F6] animate-glow-pulse shadow-lg shadow-blue-500/20'
                       : isPassed
-                      ? 'bg-[#121217]/50 border-[#1A1A22] opacity-40'
+                      ? 'bg-[#121217]/50 border-[#1A1A22] opacity-50'
+                      : isNext
+                      ? 'bg-amber-500/5 border-[#2A2A30] border-l-4 border-l-amber-500/60'
                       : 'bg-[#1A1A1E] border-[#2A2A30]'
                   }`}
                 >
+                  {isPassed && (
+                    <CheckCircle2 className="absolute top-2 right-2 w-3.5 h-3.5 text-emerald-500/60 pointer-events-none" />
+                  )}
                   <div className="flex items-center gap-3">
                     <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold font-mono ${
                       isCurrent ? 'bg-[#3B82F6] text-white shadow-md' : 'bg-[#1A1A1E] border border-[#2A2A30] text-[#8E9299]'
@@ -284,7 +310,13 @@ export default function RoutePlanner({
 
                 {index < routeStops.length - 1 && (
                   <div className="flex justify-center my-1">
-                    <ArrowDown className="w-4 h-4 text-[#2A2A30]" />
+                    <div className={`w-0.5 h-4 rounded-full ${
+                      isPassed
+                        ? 'bg-emerald-500/50'
+                        : isCurrent
+                        ? 'bg-[#3B82F6] animate-pulse'
+                        : 'bg-[#2A2A30]'
+                    }`} />
                   </div>
                 )}
               </motion.div>

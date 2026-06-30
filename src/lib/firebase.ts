@@ -16,7 +16,18 @@ const databaseId = "ai-studio-schoolbusroutepl-6144e8d8-2b0b-450b-8386-219f40e3a
 
 // Initialize standard Firebase app lazily
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-export const db = getFirestore(app, databaseId);
+
+export let firebaseInitError: string | null = null;
+
+let db: any;
+try {
+  db = getFirestore(app, databaseId);
+} catch (e) {
+  console.warn('Named database not available, using default:', e);
+  db = getFirestore(app);
+  firebaseInitError = e instanceof Error ? e.message : String(e);
+}
+export { db };
 
 // Check if Firebase is successfully configured (it is configured by default with sandbox credentials)
 export function isFirebaseConfigured(): boolean {

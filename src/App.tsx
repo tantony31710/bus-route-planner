@@ -642,11 +642,12 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0A0A0C] text-[#F0F0F0] flex flex-col font-sans" id="main-app-viewport">
       {/* 1. Header with dynamic brand, telemetry & notification bar */}
-      <header className="bg-[#121217] text-[#F0F0F0] sticky top-0 z-50 px-6 py-5 border-b border-[#2A2A30] shadow-xl shadow-black/20">
+      <header className="bg-[#121217] text-[#F0F0F0] sticky top-0 z-50 px-6 py-5 border-b border-[#2A2A30] shadow-xl shadow-black/20 animate-slide-down">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-xl flex items-center justify-center">
-              <Bus className="w-6 h-6 text-[#3B82F6]" />
+            <div className="relative w-11 h-11 bg-[#3B82F6]/10 border border-[#3B82F6]/30 rounded-xl flex items-center justify-center animate-glow-pulse animate-bus-ride">
+              <span className="absolute inset-0 rounded-xl animate-ping bg-[#3B82F6]/20"></span>
+              <Bus className="w-6 h-6 text-[#3B82F6] relative z-10" />
             </div>
             <div>
               <h1 id="app-logo-title" className="text-lg font-bold tracking-tight uppercase font-display">
@@ -654,24 +655,41 @@ export default function App() {
               </h1>
               <div className="text-[10px] text-[#8E9299] uppercase tracking-widest flex items-center gap-2 mt-0.5">
                 <span>Heliopolis Route Planner & Attendance Board</span>
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
+                <span className="relative inline-flex items-center justify-center w-3 h-3">
+                  <span className="absolute inline-block w-3 h-3 rounded-full bg-[#10B981]/75 animate-ping"></span>
+                  <span className="relative inline-block w-1.5 h-1.5 rounded-full bg-[#10B981] animate-pulse"></span>
+                </span>
                 <span>Live GPS Feed</span>
               </div>
             </div>
           </div>
 
           {/* Quick stats on top */}
-          <div className="hidden md:flex items-center gap-6 text-xs text-[#8E9299]">
+          <div className="hidden md:flex items-center gap-6 text-xs text-[#8E9299] animate-fade-in">
             <div className="flex flex-col items-end border-r border-[#2A2A30] pr-6">
               <span className="text-[9px] uppercase tracking-wider text-[#8E9299]">Checked Boarding</span>
-              <span className="font-mono text-sm text-[#10B981] font-bold">
-                {students.filter(s => s.boardingStatus === 'boarded').length} / {students.length - students.filter(s => s.boardingStatus === 'absent').length} verified
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    students.filter(s => s.boardingStatus === 'boarded').length === students.length - students.filter(s => s.boardingStatus === 'absent').length
+                      ? 'bg-[#10B981] animate-pulse'
+                      : students.filter(s => s.boardingStatus === 'boarded').length > 0
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-red-500 animate-pulse'
+                  }`}
+                ></span>
+                <span className="font-mono text-sm text-[#10B981] font-bold">
+                  <span className="tabular-nums">{students.filter(s => s.boardingStatus === 'boarded').length}</span>
+                  {' / '}
+                  <span className="tabular-nums">{students.length - students.filter(s => s.boardingStatus === 'absent').length}</span>
+                  {' verified'}
+                </span>
+              </div>
             </div>
             <div className="flex flex-col items-end">
               <span className="text-[9px] uppercase tracking-wider text-[#8E9299]">School ETA</span>
               <span className="font-mono text-sm text-[#3B82F6] font-bold">
-                {routeStops[routeStops.length - 1]?.eta}
+                <span className="tabular-nums">{routeStops[routeStops.length - 1]?.eta}</span>
               </span>
             </div>
           </div>
@@ -679,27 +697,38 @@ export default function App() {
 
         {/* 2. Slide Down Simulated Push Notification Alert Toast */}
         {activePush && (
-          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-3 w-full max-w-md bg-rose-950/95 backdrop-blur-md text-rose-100 p-4 rounded-2xl shadow-2xl border border-rose-500/40 flex items-start justify-between gap-3 animate-bounce z-50">
-            <div className="flex gap-2.5">
-              <Bell className="w-5 h-5 mt-0.5 shrink-0 animate-swing text-rose-400" />
-              <div>
-                <h4 className="font-bold text-xs uppercase tracking-widest text-rose-400">
-                  ⚠️ TRAFFIC PUSH ALERT: {activePush.streetName.toUpperCase()}
-                </h4>
-                <p className="text-xs font-medium mt-1 leading-relaxed">
-                  {activePush.message} — Parents and teachers updated via push notification.
-                </p>
-                <div className="text-[10px] text-rose-300/70 mt-1">
-                  Sent to {students.filter(s => getStreetSegmentId(s.street) === getStreetSegmentId(activePush.streetName)).length} registered parents at {activePush.timestamp}
+          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-3 w-full max-w-md backdrop-blur-xl bg-gradient-to-r from-rose-950/90 to-red-900/90 text-rose-100 rounded-2xl shadow-2xl border border-rose-500/40 border-l-4 border-l-rose-500 flex flex-col overflow-hidden animate-slide-down z-50">
+            <div className="flex items-start justify-between gap-3 p-4">
+              <div className="flex gap-2.5">
+                <Bell className="w-5 h-5 mt-0.5 shrink-0 animate-swing text-rose-400" />
+                <div>
+                  <h4 className="font-bold text-xs uppercase tracking-widest text-rose-400">
+                    ⚠️ TRAFFIC PUSH ALERT: {activePush.streetName.toUpperCase()}
+                  </h4>
+                  <p className="text-xs font-medium mt-1 leading-relaxed">
+                    {activePush.message} — Parents and teachers updated via push notification.
+                  </p>
+                  <div className="text-[10px] text-rose-300/70 mt-1">
+                    Sent to {students.filter(s => getStreetSegmentId(s.street) === getStreetSegmentId(activePush.streetName)).length} registered parents at {activePush.timestamp}
+                  </div>
                 </div>
               </div>
+              <button
+                onClick={() => setActivePush(null)}
+                className="p-1.5 hover:bg-white/10 rounded-lg text-rose-400 hover:text-rose-200 transition-all shrink-0"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              onClick={() => setActivePush(null)}
-              className="p-1.5 hover:bg-white/10 rounded-lg text-rose-400 hover:text-rose-200 transition-all shrink-0"
-            >
-              ✕
-            </button>
+            {/* Auto-shrink progress bar over 8 seconds */}
+            <div className="h-0.5 bg-rose-900/60 w-full">
+              <div
+                className="h-full bg-rose-400"
+                style={{
+                  animation: 'toast-progress 8s linear forwards',
+                }}
+              ></div>
+            </div>
           </div>
         )}
       </header>
