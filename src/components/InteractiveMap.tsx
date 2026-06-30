@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { Student, RouteStop, TrafficSegment, BuildingKey } from '../types';
 import { BUILDINGS_INFO } from '../data/students';
-import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, LocateFixed, LocateOff, Navigation, ExternalLink, RefreshCw } from 'lucide-react';
+import { MapPin, Bus, AlertTriangle, ShieldCheck, Home, ArrowRight, Layers, LocateFixed, LocateOff, Navigation, ExternalLink } from 'lucide-react';
 import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { snapToRoadNetwork } from '../utils/routing';
 
