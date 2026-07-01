@@ -9,6 +9,7 @@ import SmartBriefing from './components/SmartBriefing';
 import AIEngineerLab from './components/AIEngineerLab';
 import { Bus, Bell, ShieldAlert, CheckCircle, Navigation, Users, Clock, Compass, HelpCircle, Volume2 } from 'lucide-react';
 import { isFirebaseConfigured, subscribeToStudents, syncStudentsToFirebase, updateStudentBoardingStatusInFirebase } from './lib/firebase';
+import AnimatedStatsBar from './components/AnimatedStatsBar';
 
 // Haversine formula to find distance in kilometers between two points
 function getHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -695,7 +696,17 @@ export default function App() {
           </div>
         </div>
 
-        {/* 2. Slide Down Simulated Push Notification Alert Toast */}
+        {/* 2. Animated stats sub-bar */}
+        <div className="max-w-7xl mx-auto mt-3 pt-3 border-t border-[#2A2A30]/60">
+          <AnimatedStatsBar
+            total={students.length}
+            boarded={students.filter(s => s.boardingStatus === 'boarded').length}
+            absent={students.filter(s => s.boardingStatus === 'absent').length}
+            notBoarded={students.filter(s => s.boardingStatus === 'waiting').length}
+          />
+        </div>
+
+        {/* 3. Slide Down Simulated Push Notification Alert Toast */}
         {activePush && (
           <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-3 w-full max-w-md backdrop-blur-xl bg-gradient-to-r from-rose-950/90 to-red-900/90 text-rose-100 rounded-2xl shadow-2xl border border-rose-500/40 border-l-4 border-l-rose-500 flex flex-col overflow-hidden animate-slide-down z-50">
             <div className="flex items-start justify-between gap-3 p-4">
