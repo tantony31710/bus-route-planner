@@ -155,6 +155,8 @@ export default function App() {
     return { type: 'priority', alpha: 1.5, beta: 2.0, gamma: 2.5 };
   });
 
+  const [viewTab, setViewTab] = useState<'dispatch' | 'data'>('dispatch');
+
   const [systemPrompt, setSystemPrompt] = useState(() => {
     return localStorage.getItem('roxy_bus_system_prompt') || "You are the 'Roxy Smart School Bus Dispatch Co-pilot' for Heliopolis Cairo school routes.";
   });
@@ -746,6 +748,30 @@ export default function App() {
 
       {/* 3. Main Dashboard Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-5 md:py-8 space-y-6">
+
+        {/* ── Top-level Tab Bar ── */}
+        <div className="flex gap-1 rounded-2xl border border-[#2A2A30] bg-[#121217] p-1.5 w-fit shadow-lg">
+          {([
+            { id: 'dispatch', label: '🚌 Dispatch Board', color: 'text-[#3B82F6]' },
+            { id: 'data',     label: '📊 Data Scientist',  color: 'text-purple-400' },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setViewTab(tab.id)}
+              className={`px-5 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-200 ${
+                viewTab === tab.id
+                  ? `bg-[#1E1E26] ${tab.color} shadow`
+                  : 'text-[#8E9299] hover:text-white/70'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ══════════════ DISPATCH TAB ══════════════ */}
+        {viewTab === 'dispatch' && (
+        <>
         {/* Row 1: Left Map, Right Route Engine & AI Dispatch Briefing */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Map area (takes 2/3 wide on large displays) */}
@@ -872,6 +898,131 @@ export default function App() {
           isRealAI={Boolean(process.env.GEMINI_API_KEY)}
           onUpdateStudents={setStudents}
         />
+        </> /* end dispatch tab */
+        )}
+
+        {/* ══════════════ DATA SCIENTIST TAB ══════════════ */}
+        {viewTab === 'data' && (() => {
+          const boarded  = students.filter(s => s.boardingStatus === 'boarded').length;
+          const absent   = students.filter(s => s.boardingStatus === 'absent').length;
+          const waiting  = students.filter(s => s.boardingStatus === 'waiting').length;
+          const total    = students.length;
+          const boardPct = total > 0 ? ((boarded / (total - absent)) * 100).toFixed(1) : '0';
+
+          // Group breakdown
+          const buildings = ['hadra', 'wanas', 'nagar', 'demiana', 'new'] as const;
+          const buildingStats = buildings.map(b => ({
+            key: b,
+            label: BUILDINGS_INFO[b]?.name || b,
+            color: BUILDINGS_INFO[b]?.color || '#3b82f6',
+            total: students.filter(s => s.buildingKey === b).length,
+            boarded: students.filter(s => s.buildingKey === b && s.boardingStatus === 'boarded').length,
+            absent: students.filter(s => s.buildingKey === b && s.boardingStatus === 'absent').length,
+          }));
+
+          // Traffic hotspots
+          const hotTraffic = trafficSegments
+            .filter(t => t.status !== 'clear')
+            .sort((a, b) => b.delayMinutes - a.delayMinutes);
+
+          // Route stops summary
+          const stopCount = routeStops.filter(s => s.type === 'student').length;
+
+          return (
+            <div className="space-y-6">
+              {/* Stat cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                {[
+                  { label: 'Total Students', val: total,         color: '#3B82F6' },
+                  { label: 'Boarded',         val: boarded,       color: '#10B981' },
+                  { label: 'Absent',          val: absent,        color: '#6B7280' },
+                  { label: 'Awaiting',        val: waiting,       color: '#F59E0B' },
+                  { label: 'Board Rate',      val: `${boardPct}%`,color: '#A78BFA' },
+                  { label: 'Route Stops',     val: stopCount,     color: '#60A5FA' },
+                ].map(c => (
+                  <div key={c.label} className="rounded-xl border border-[#2A2A30] bg-[#121217] p-4">
+                    <div className="text-[10px] uppercase tracking-wider text-[#8E9299] mb-1">{c.label}</div>
+                    <div className="text-2xl font-extrabold font-mono" style={{ color: c.color }}>{c.val}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Building breakdown heatmap */}
+              <div className="rounded-xl border border-[#2A2A30] bg-[#121217] p-5">
+                <h3 className="text-sm font-bold uppercase tracking-wider text-[#8E9299] mb-4">Boarding Rate by Building</h3>
+                <div className="flex gap-4 flex-wrap">
+                  {buildingStats.map(b => {
+                    const active = b.total - b.absent;
+                    const pct = active > 0 ? Math.round((b.boarded / active) * 100) : 0;
+                    return (
+                      <div key={b.key} className="flex-1 min-w-[100px] rounded-xl border border-[#2A2A30] p-4" style={{ borderColor: b.color + '44' }}>
+                        <div className="text-[10px] font-bold uppercase text-[#8E9299] mb-2">{b.label}</div>
+                        <div className="h-2 rounded-full bg-[#1E1E26] mb-2 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: b.color, boxShadow: `0 0 6px ${b.color}88` }} />
+                        </div>
+                        <div className="font-mono text-lg font-bold" style={{ color: b.color }}>{pct}%</div>
+                        <div className="text-[10px] text-[#8E9299] mt-0.5">{b.boarded}/{active} boarded</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Traffic incidents */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-xl border border-[#2A2A30] bg-[#121217] p-5">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-[#8E9299] mb-4">Active Traffic Incidents</h3>
+                  {hotTraffic.length === 0 ? (
+                    <p className="text-xs text-[#8E9299] italic">All streets clear ✅</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {hotTraffic.map(t => (
+                        <div key={t.id} className="flex items-center gap-3 text-xs">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${t.status === 'heavy' ? 'bg-red-500' : t.status === 'moderate' ? 'bg-amber-400' : 'bg-yellow-300'}`} />
+                          <span className="flex-1 text-white/70" dir="rtl">{t.streetName}</span>
+                          <span className="font-mono text-red-400 font-bold">+{t.delayMinutes}m</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Route timeline summary */}
+                <div className="rounded-xl border border-[#2A2A30] bg-[#121217] p-5">
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-[#8E9299] mb-4">Route Timeline Summary</h3>
+                  <div className="space-y-2">
+                    {routeStops.slice(0, 8).map((stop, i) => (
+                      <div key={stop.id} className="flex items-center gap-3 text-xs">
+                        <span className="font-mono text-[#8E9299] w-4">#{i + 1}</span>
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${stop.type === 'hub' ? 'bg-[#3B82F6]' : 'bg-[#10B981]'}`} />
+                        <span className="flex-1 truncate text-white/70">{stop.name}</span>
+                        <span className="font-mono text-[#3B82F6]">{stop.eta}</span>
+                      </div>
+                    ))}
+                    {routeStops.length > 8 && (
+                      <div className="text-[10px] text-[#8E9299] pt-1">…and {routeStops.length - 8} more stops</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* AIEngineerLab embedded */}
+              <AIEngineerLab
+                students={students}
+                routeStops={routeStops}
+                trafficSegments={trafficSegments}
+                solverConfig={solverConfig}
+                onUpdateSolverConfig={setSolverConfig}
+                systemPrompt={systemPrompt}
+                onUpdateSystemPrompt={setSystemPrompt}
+                modelTemp={modelTemp}
+                onUpdateModelTemp={setModelTemp}
+                isRealAI={Boolean(process.env.GEMINI_API_KEY)}
+                onUpdateStudents={setStudents}
+              />
+            </div>
+          );
+        })()}
       </main>
 
       {/* Footer Controls / Telemetry info */}

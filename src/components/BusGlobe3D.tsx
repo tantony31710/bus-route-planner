@@ -1,14 +1,14 @@
 /**
- * BusGlobe3D — Pure CSS + SVG animated globe. Zero external 3-D deps.
- *
- * Renders a dark spinning globe with:
- * - Rotating meridian/parallel lines via CSS animation
- * - A small bus icon orbiting the equator
- * - Glowing atmosphere ring
+ * BusGlobe3D — Canvas-rendered animated 3D globe with:
+ * - Full perspective-projected lat/lng grid (meridians + parallels)
+ * - Animated auto-spin
+ * - Glowing atmosphere layers
+ * - Orbiting bus icon with trail
+ * - Pulsing glow rings
  * - Respects prefers-reduced-motion
  */
 
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Bus } from 'lucide-react';
 
 export interface BusGlobe3DProps {
@@ -16,10 +16,191 @@ export interface BusGlobe3DProps {
   size?: number;
 }
 
-export default function BusGlobe3D({ className = '', size = 160 }: BusGlobe3DProps) {
-  const r = size / 2;
-  const cx = r;
-  const cy = r;
+export default function BusGlobe3D({ className = '', size = 200 }: BusGlobe3DProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animRef   = useRef<number>(0);
+  const spinRef   = useRef(0);
+
+  const reducedMotion =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const DPR = window.devicePixelRatio || 1;
+    const S   = size * DPR;
+    canvas.width  = S;
+    canvas.height = S;
+    canvas.style.width  = `${size}px`;
+    canvas.style.height = `${size}px`;
+
+    const cx = S / 2;
+    const cy = S / 2;
+    const R  = S * 0.42;   // globe radius in canvas px
+
+    /** Project a lat/lng + current spin angle to canvas 2D */
+    function project(
+      latDeg: number,
+      lonDeg: number,
+      spin: number,
+    ): { x: number; y: number; visible: boolean } {
+      const lat = (latDeg * Math.PI) / 180;
+      const lon = (lonDeg * Math.PI) / 180 + spin;
+      // 3D globe point (Y-up sphere)
+      const px = Math.cos(lat) * Math.sin(lon);
+      const py = Math.sin(lat);
+      const pz = Math.cos(lat) * Math.cos(lon);
+      return {
+        x: cx + R * px,
+        y: cy - R * py,
+        visible: pz > -0.05,   // front hemisphere
+      };
+    }
+
+    function drawFrame(timestamp: number) {
+      ctx.clearRect(0, 0, S, S);
+
+      if (!reducedMotion) {
+        spinRef.current = timestamp * 0.00035;
+      }
+      const spin = spinRef.current;
+
+      // ── Outer atmosphere glow ──────────────────────────────────
+      const atm = ctx.createRadialGradient(cx, cy, R * 0.85, cx, cy, R * 1.22);
+      atm.addColorStop(0,   'rgba(59,130,246,0.22)');
+      atm.addColorStop(0.5, 'rgba(37,99,235,0.08)');
+      atm.addColorStop(1,   'transparent');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.22, 0, Math.PI * 2);
+      ctx.fillStyle = atm;
+      ctx.fill();
+
+      // ── Globe base ────────────────────────────────────────────
+      const globe = ctx.createRadialGradient(cx - R * 0.28, cy - R * 0.25, 0, cx, cy, R);
+      globe.addColorStop(0,   '#1e3a5f');
+      globe.addColorStop(0.5, '#0d1f35');
+      globe.addColorStop(1,   '#060e1a');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.fillStyle = globe;
+      ctx.fill();
+
+      // ── Grid lines ────────────────────────────────────────────
+      // Parallels (latitudes)
+      const latitudes  = [-60, -45, -30, -15, 0, 15, 30, 45, 60];
+      const longitudes = Array.from({ length: 12 }, (_, i) => i * 30);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.clip();
+
+      // Draw parallels
+      for (const lat of latitudes) {
+        const steps = 120;
+        let started = false;
+        for (let i = 0; i <= steps; i++) {
+          const lon = (i / steps) * 360 - 180;
+          const pt = project(lat, lon, spin);
+          if (!pt.visible) { started = false; continue; }
+          const alpha = 0.2 + 0.12 * Math.abs(Math.cos((lat * Math.PI) / 180));
+          ctx.strokeStyle = `rgba(59,130,246,${alpha.toFixed(2)})`;
+          ctx.lineWidth   = 0.6 * DPR;
+          if (!started) { ctx.beginPath(); ctx.moveTo(pt.x, pt.y); started = true; }
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        if (started) ctx.stroke();
+      }
+
+      // Draw meridians
+      for (const lon of longitudes) {
+        const steps = 90;
+        let started = false;
+        for (let i = 0; i <= steps; i++) {
+          const lat = (i / steps) * 180 - 90;
+          const pt = project(lat, lon, spin);
+          if (!pt.visible) { started = false; continue; }
+          ctx.strokeStyle = 'rgba(59,130,246,0.2)';
+          ctx.lineWidth   = 0.6 * DPR;
+          if (!started) { ctx.beginPath(); ctx.moveTo(pt.x, pt.y); started = true; }
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        if (started) ctx.stroke();
+      }
+
+      // Equator highlight
+      {
+        let started = false;
+        for (let i = 0; i <= 160; i++) {
+          const lon = (i / 160) * 360 - 180;
+          const pt  = project(0, lon, spin);
+          if (!pt.visible) { started = false; continue; }
+          ctx.strokeStyle = 'rgba(59,130,246,0.55)';
+          ctx.lineWidth   = 1.2 * DPR;
+          if (!started) { ctx.beginPath(); ctx.moveTo(pt.x, pt.y); started = true; }
+          else ctx.lineTo(pt.x, pt.y);
+        }
+        if (started) ctx.stroke();
+      }
+
+      ctx.restore();
+
+      // ── Rim highlight ──────────────────────────────────────────
+      const rim = ctx.createRadialGradient(cx, cy, R * 0.68, cx, cy, R);
+      rim.addColorStop(0,   'transparent');
+      rim.addColorStop(0.8, 'transparent');
+      rim.addColorStop(1,   'rgba(59,130,246,0.55)');
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(59,130,246,0.3)';
+      ctx.lineWidth   = 1.5 * DPR;
+      ctx.stroke();
+      ctx.fillStyle = rim;
+      ctx.fill();
+
+      // ── Specular highlight (lens flare) ───────────────────────
+      const spec = ctx.createRadialGradient(
+        cx - R * 0.3, cy - R * 0.3, 0,
+        cx - R * 0.3, cy - R * 0.3, R * 0.55
+      );
+      spec.addColorStop(0,   'rgba(255,255,255,0.07)');
+      spec.addColorStop(0.5, 'rgba(255,255,255,0.02)');
+      spec.addColorStop(1,   'transparent');
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.fillStyle = spec;
+      ctx.fillRect(0, 0, S, S);
+      ctx.restore();
+
+      // ── Pulsing outer ring ─────────────────────────────────────
+      const pulse = 0.7 + 0.3 * Math.sin(timestamp * 0.0025);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.12, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(59,130,246,${(pulse * 0.25).toFixed(3)})`;
+      ctx.lineWidth   = 1 * DPR;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, R * 1.28, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(59,130,246,${(pulse * 0.12).toFixed(3)})`;
+      ctx.lineWidth   = 0.8 * DPR;
+      ctx.stroke();
+
+      animRef.current = requestAnimationFrame(drawFrame);
+    }
+
+    animRef.current = requestAnimationFrame(drawFrame);
+    return () => cancelAnimationFrame(animRef.current);
+  }, [size, reducedMotion]);
+
+  // Orbiting bus orbit angle
+  const orbitAngle = reducedMotion ? -90 : undefined;
 
   return (
     <div
@@ -27,119 +208,47 @@ export default function BusGlobe3D({ className = '', size = 160 }: BusGlobe3DPro
       style={{ width: size, height: size }}
       aria-label="3D spinning globe"
     >
-      {/* ── Outer atmosphere glow ── */}
-      <div
-        className="absolute inset-0 rounded-full animate-glow-pulse"
-        style={{
-          background: 'radial-gradient(circle, rgba(59,130,246,0.15) 60%, transparent 80%)',
-          borderRadius: '50%',
-        }}
+      {/* Canvas globe */}
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', borderRadius: '50%' }}
       />
 
-      {/* ── Globe SVG ── */}
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        style={{ overflow: 'visible' }}
-      >
-        <defs>
-          {/* Clip to circle */}
-          <clipPath id="globe-clip">
-            <circle cx={cx} cy={cy} r={r * 0.88} />
-          </clipPath>
-          {/* Atmosphere gradient */}
-          <radialGradient id="globe-fill" cx="40%" cy="35%">
-            <stop offset="0%"   stopColor="#1e3a5f" />
-            <stop offset="60%"  stopColor="#0d1f35" />
-            <stop offset="100%" stopColor="#060e1a" />
-          </radialGradient>
-          {/* Rim highlight */}
-          <radialGradient id="rim-glow" cx="50%" cy="50%">
-            <stop offset="70%" stopColor="transparent" />
-            <stop offset="100%" stopColor="rgba(59,130,246,0.5)" />
-          </radialGradient>
-        </defs>
-
-        {/* Globe base */}
-        <circle cx={cx} cy={cy} r={r * 0.88} fill="url(#globe-fill)" />
-
-        {/* Grid lines clipped to globe */}
-        <g clipPath="url(#globe-clip)" opacity="0.35">
-          {/* Static parallels (latitude lines) */}
-          {[-0.6, -0.35, 0, 0.35, 0.6].map((offset, i) => {
-            const latY = cy + offset * r * 0.88;
-            const latRx = Math.sqrt(Math.max(0, (r * 0.88) ** 2 - (offset * r * 0.88) ** 2));
-            return (
-              <ellipse
-                key={`lat-${i}`}
-                cx={cx} cy={latY}
-                rx={latRx} ry={latRx * 0.12}
-                fill="none" stroke="#3b82f6" strokeWidth="0.8"
-              />
-            );
-          })}
-
-          {/* Animated spinning meridians (longitude lines) */}
-          <g style={{ animation: 'globe-spin 8s linear infinite', transformOrigin: `${cx}px ${cy}px` }}>
-            {[0, 45, 90, 135].map((angle, i) => (
-              <ellipse
-                key={`lon-${i}`}
-                cx={cx} cy={cy}
-                rx={r * 0.25} ry={r * 0.88}
-                fill="none" stroke="#3b82f6" strokeWidth="0.8"
-                transform={`rotate(${angle} ${cx} ${cy})`}
-              />
-            ))}
-          </g>
-        </g>
-
-        {/* Rim glow overlay */}
-        <circle cx={cx} cy={cy} r={r * 0.88} fill="url(#rim-glow)" />
-
-        {/* Equator highlight line */}
-        <ellipse
-          cx={cx} cy={cy}
-          rx={r * 0.88} ry={r * 0.10}
-          fill="none" stroke="rgba(59,130,246,0.4)" strokeWidth="1"
-        />
-      </svg>
-
-      {/* ── Orbiting bus icon ── */}
+      {/* Orbiting bus icon */}
       <div
-        className="absolute"
+        className="absolute pointer-events-none"
         style={{
-          animation: 'bus-orbit 6s linear infinite',
-          transformOrigin: '50% 50%',
           top: 0, left: 0, width: '100%', height: '100%',
+          animation: reducedMotion ? undefined : 'bus-orbit-3d 5s linear infinite',
         }}
       >
         <div
           style={{
             position: 'absolute',
-            top: '10%',
+            top: '7%',
             left: '50%',
             transform: 'translateX(-50%)',
           }}
         >
-          <div className="w-6 h-6 rounded-full bg-[#3b82f6]/20 border border-[#3b82f6]/60 flex items-center justify-center shadow-lg shadow-blue-500/30">
-            <Bus className="w-3.5 h-3.5 text-[#3b82f6]" />
+          <div
+            style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: 'rgba(59,130,246,0.18)',
+              border: '1.5px solid rgba(59,130,246,0.7)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 12px rgba(59,130,246,0.55), 0 0 4px rgba(59,130,246,0.9)',
+            }}
+          >
+            <Bus style={{ width: 13, height: 13, color: '#60a5fa' }} />
           </div>
         </div>
       </div>
 
-      {/* Keyframes injected inline */}
+      {/* Keyframes */}
       <style>{`
-        @keyframes globe-spin {
-          from { transform: rotateY(0deg); }
-          to   { transform: rotateY(360deg); }
-        }
-        @keyframes bus-orbit {
+        @keyframes bus-orbit-3d {
           from { transform: rotate(0deg); }
           to   { transform: rotate(360deg); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .bus-globe-reduced * { animation: none !important; }
         }
       `}</style>
     </div>
