@@ -26,6 +26,7 @@ export interface Student {
   buildingKey: BuildingKey;
   boardingStatus: BoardingStatus;
   boardingTime?: string;
+  dataSource?: 'inline' | 'redirect' | 'lookup';
 }
 
 export interface TrafficSegment {

@@ -21,7 +21,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201226749379',
     classLocation: 'مبنى الأنبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_2',
@@ -44,7 +45,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201229197247',
     classLocation: 'الانبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_3',
@@ -68,7 +70,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201280142982',
     classLocation: 'الدور الثاني ثالث فصل في مبني الانبا هدرا',
     buildingKey: 'hadra',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_4',
@@ -92,7 +95,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201550565729',
     classLocation: 'مبنى الانبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_5',
@@ -115,7 +119,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+20127156582',
     classLocation: 'يوسف النجار',
     buildingKey: 'nagar',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_6',
@@ -138,7 +143,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201210392382',
     classLocation: 'الانبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_7',
@@ -161,7 +167,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201200046367',
     classLocation: 'الآنبا ونس الدور الاول',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_8',
@@ -185,7 +192,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201066391391',
     classLocation: 'الدور الثاني الانبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_9',
@@ -207,7 +215,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201279114004',
     classLocation: 'الانبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_10',
@@ -229,7 +238,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201288892677',
     classLocation: 'مبني الابناء هدرا',
     buildingKey: 'hadra',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_11',
@@ -251,7 +261,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201276447610',
     classLocation: 'مبنى أنبا هدرا، الدور التاني، فصل 1 الملاك جبرائيل',
     buildingKey: 'hadra',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_12',
@@ -275,7 +286,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201272627009',
     classLocation: 'مبني يوسف النجار مدرج الدور التالت',
     buildingKey: 'nagar',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_13',
@@ -299,7 +311,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201210392382',
     classLocation: 'مبني الأنبا ونس فصل ابو مقار',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_14',
@@ -322,7 +335,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201279007411',
     classLocation: 'فى النادى الدور التالت مبنى يوسف النجار',
     buildingKey: 'nagar',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_15',
@@ -345,7 +359,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201204253887',
     classLocation: 'الانبا ونس',
     buildingKey: 'wanas',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   },
   {
     id: 'stud_16',
@@ -368,7 +383,8 @@ export const INITIAL_STUDENTS: Student[] = [
     servantPhone: '+201223549262',
     classLocation: '104 مبني يوسف النجار',
     buildingKey: 'nagar',
-    boardingStatus: 'waiting'
+    boardingStatus: 'waiting',
+    dataSource: 'lookup'
   }
 ];
 

@@ -10,6 +10,8 @@ import AIEngineerLab from './components/AIEngineerLab';
 import { Bus, Bell, ShieldAlert, CheckCircle, Navigation, Users, Clock, Compass, HelpCircle, Volume2 } from 'lucide-react';
 import { isFirebaseConfigured, subscribeToStudents, syncStudentsToFirebase, updateStudentBoardingStatusInFirebase } from './lib/firebase';
 import AnimatedStatsBar from './components/AnimatedStatsBar';
+import { useRouteSolver } from './hooks/useRouteSolver';
+import { useSimulation } from './hooks/useSimulation';
 
 // Haversine formula to find distance in kilometers between two points
 function getHaversineDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -236,193 +238,19 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Map street lookup helper
-  const getStreetSegmentId = (streetName: string) => {
-    const normalized = streetName.toLowerCase();
-    if (normalized.includes('سلحدار')) return 'selahdar';
-    if (normalized.includes('مأمون') || normalized.includes('مامون')) return 'khalifa';
-    if (normalized.includes('أشجار') || normalized.includes('اشجار')) return 'ashgar';
-    if (normalized.includes('مقر')) return 'mokrizi';
-    if (normalized.includes('نوير')) return 'noweiry';
-    if (normalized.includes('شيخ') || normalized.includes('نور')) return 'abu_nour';
-    return 'other';
-  };
 
-  // 1. Calculate optimal sequence stop points
-  const routeStops = useMemo((): RouteStop[] => {
-    const startHub = routeType === 'morning'
-      ? (START_HUBS.find(h => h.id === startHubId) || START_HUBS[0])
-      : (END_HUBS.find(h => h.id === endHubId) || END_HUBS[0]);
-    const endHub = routeType === 'morning'
-      ? (END_HUBS.find(h => h.id === endHubId) || END_HUBS[0])
-      : (START_HUBS.find(h => h.id === startHubId) || START_HUBS[0]);
-
-    // Filter out students marked absent from routing to keep things extremely efficient
-    const activeStudents = students.filter(s => s.boardingStatus !== 'absent');
-
-    const baseHour = routeType === 'morning' ? 8 : 14; // 8:00 AM or 2:00 PM
-    const startEtaStr = routeType === 'morning' ? '08:00 AM' : '02:00 PM';
-    const sampleEndEtaStr = routeType === 'morning' ? '08:05 AM' : '02:05 PM';
-
-    if (activeStudents.length === 0) {
-      return [
-        { id: 'start', name: startHub.name, type: 'hub', lat: startHub.lat, lng: startHub.lng, eta: startEtaStr, distanceFromPrev: 0, durationFromPrev: 0 },
-        { id: 'end', name: endHub.name, type: 'hub', lat: endHub.lat, lng: endHub.lng, eta: sampleEndEtaStr, distanceFromPrev: 1.5, durationFromPrev: 5 }
-      ];
-    }
-
-    let orderedStudents: Student[] = [];
-
-    if (isOptimized) {
-      // Multi-Criteria Nearest Neighbor solver starting from startHub
-      // Use live GPS driver position as start if available, otherwise fall back to hub
-      const routeOrigin = liveDriverPos || { lat: startHub.lat, lng: startHub.lng };
-      let currentPos = { lat: routeOrigin.lat, lng: routeOrigin.lng };
-      const unvisited = [...activeStudents];
-
-      while (unvisited.length > 0) {
-        let closestIdx = 0;
-        let minCost = Infinity;
-
-        for (let i = 0; i < unvisited.length; i++) {
-          const student = unvisited[i];
-          const dist = getHaversineDistance(currentPos.lat, currentPos.lng, student.lat, student.lng);
-          
-          let cost = dist * solverConfig.alpha;
-
-          if (solverConfig.type !== 'distance') {
-            const segmentId = getStreetSegmentId(student.street);
-            const segmentTraffic = trafficSegments.find(t => t.id === segmentId);
-            const delay = segmentTraffic ? segmentTraffic.delayMinutes : 0;
-            // 1 minute delay is equivalent to 0.15 km of travel
-            cost += (delay * 0.15) * solverConfig.beta;
-          }
-
-          if (solverConfig.type === 'priority') {
-            const buildingWeight = 
-              student.buildingKey === 'hadra' ? 0.8 : 
-              student.buildingKey === 'wanas' ? 0.6 : 
-              student.buildingKey === 'nagar' ? 0.3 : 
-              student.buildingKey === 'demiana' ? 0.2 : 0.1;
-            // High priority reduces cost, attracting early pickup/dropoff
-            cost -= buildingWeight * solverConfig.gamma;
-          }
-
-          if (cost < minCost) {
-            minCost = cost;
-            closestIdx = i;
-          }
-        }
-
-        const nextStud = unvisited.splice(closestIdx, 1)[0];
-        orderedStudents.push(nextStud);
-        // If there are other active students living at the exact same building/coordinates, pull them too!
-        const sameSpotStudents = unvisited.filter(s => Math.abs(s.lat - nextStud.lat) < 0.0001 && Math.abs(s.lng - nextStud.lng) < 0.0001);
-        sameSpotStudents.forEach(s => {
-          orderedStudents.push(s);
-          const sIdx = unvisited.findIndex(u => u.id === s.id);
-          if (sIdx !== -1) unvisited.splice(sIdx, 1);
-        });
-
-        currentPos = { lat: nextStud.lat, lng: nextStud.lng };
-      }
-    } else {
-      // Manual sequence sorting using the manualStudentIds array
-      const mapped = manualStudentIds
-        .map(id => activeStudents.find(s => s.id === id))
-        .filter((s): s is Student => s !== undefined);
-      
-      // If any active student was missing from manual ids list, append them safely
-      activeStudents.forEach(s => {
-        if (!mapped.some(m => m.id === s.id)) {
-          mapped.push(s);
-        }
-      });
-      orderedStudents = mapped;
-    }
-
-    // 3. Assemble complete chronological timeline of stops (grouping contiguous coordinates together)
-    const stops: RouteStop[] = [];
-    // Use live GPS position as start point if available
-    const routeOriginPos = liveDriverPos || { lat: startHub.lat, lng: startHub.lng };
-    const routeOriginName = liveDriverPos
-      ? `📍 Live Driver Location (${liveDriverPos.lat.toFixed(4)}, ${liveDriverPos.lng.toFixed(4)})`
-      : startHub.name;
-    stops.push({
-      id: 'start',
-      name: routeOriginName,
-      type: 'hub',
-      lat: routeOriginPos.lat,
-      lng: routeOriginPos.lng,
-      eta: startEtaStr,
-      distanceFromPrev: 0,
-      durationFromPrev: 0
-    });
-
-    let accumulatedMinutes = 0;
-    const busSpeedKmh = 25; // 25 km/h average bus speed inside congested streets
-
-    orderedStudents.forEach((student, index) => {
-      // Check if previous stop was at the exact same building to avoid duplicate stops
-      const prevStop = stops[stops.length - 1];
-      const isSameCoordinates = prevStop &&
-        Math.abs(prevStop.lat - student.lat) < 0.0001 &&
-        Math.abs(prevStop.lng - student.lng) < 0.0001;
-
-      if (isSameCoordinates) {
-        // Just append the studentId to tracking if needed, no extra stop node
-        return;
-      }
-
-      const dist = getHaversineDistance(prevStop.lat, prevStop.lng, student.lat, student.lng);
-      
-      // Calculate transit time
-      let transitMinutes = (dist / busSpeedKmh) * 60;
-      
-      // Apply active traffic segment delays if any
-      const segmentId = getStreetSegmentId(student.street);
-      const segmentTraffic = trafficSegments.find(t => t.id === segmentId);
-      if (segmentTraffic) {
-        transitMinutes += segmentTraffic.delayMinutes;
-      }
-
-      // Add a 1.5-minute buffer time for student pick-up/boarding at each stop
-      transitMinutes += 1.5;
-
-      accumulatedMinutes += transitMinutes;
-
-      stops.push({
-        id: student.id,
-        name: `${student.buildingNo} ${student.street} St Stop`,
-        type: 'pickup',
-        lat: student.lat,
-        lng: student.lng,
-        studentId: student.id,
-        eta: formatTimeFromOffset(accumulatedMinutes, baseHour),
-        distanceFromPrev: dist,
-        durationFromPrev: transitMinutes
-      });
-    });
-
-    // Add final school destination hub stop
-    const lastStop = stops[stops.length - 1];
-    const finalDist = getHaversineDistance(lastStop.lat, lastStop.lng, endHub.lat, endHub.lng);
-    let finalTransit = (finalDist / busSpeedKmh) * 60;
-    
-    accumulatedMinutes += finalTransit;
-    stops.push({
-      id: 'end',
-      name: endHub.name,
-      type: 'hub',
-      lat: endHub.lat,
-      lng: endHub.lng,
-      eta: formatTimeFromOffset(accumulatedMinutes, baseHour),
-      distanceFromPrev: finalDist,
-      durationFromPrev: finalTransit
-    });
-
-    return stops;
-  }, [students, startHubId, endHubId, isOptimized, routeType, manualStudentIds, trafficSegments, liveDriverPos, solverConfig]);
+  // Use the custom route solver hook
+  const routeStops = useRouteSolver(
+    students,
+    startHubId,
+    endHubId,
+    isOptimized,
+    routeType,
+    manualStudentIds,
+    trafficSegments,
+    liveDriverPos,
+    solverConfig
+  );
 
   // Aggregate stats
   const totalDistance = useMemo(() => {
@@ -472,60 +300,16 @@ export default function App() {
     });
   }, [routeStops, students, routeType]);
 
-  // Simulation timer effect
-  useEffect(() => {
-    let timer: any = null;
-    if (isSimulating) {
-      timer = setInterval(() => {
-        setCurrentStopIndex(prev => {
-          const next = prev + 1;
-          if (next >= routeStops.length) {
-            // Reached destination! Mark all boarded students as safely arrived
-            setStudents(current => {
-              const updated = current.map(s => {
-                if (s.boardingStatus === 'boarded') {
-                  return { ...s, boardingStatus: 'arrived' as BoardingStatus };
-                }
-                return s;
-              });
-              if (isFirebaseConfigured()) {
-                syncStudentsToFirebase(updated).catch(err => console.error(err));
-              }
-              return updated;
-            });
-            playSystemBeep(880, 0.4);
-            setIsSimulating(false);
-            return prev;
-          }
-
-          const currentStop = routeStops[next];
-          
-          // Auto boarding simulation: find any student at this stop and board them automatically!
-          if (currentStop.type === 'pickup') {
-            setStudents(current => {
-              const updated = current.map(s => {
-                if (Math.abs(s.lat - currentStop.lat) < 0.0001 && Math.abs(s.lng - currentStop.lng) < 0.0001 && s.boardingStatus === 'waiting') {
-                  return { ...s, boardingStatus: 'boarded' as BoardingStatus, boardingTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-                }
-                return s;
-              });
-              if (isFirebaseConfigured()) {
-                syncStudentsToFirebase(updated).catch(err => console.error(err));
-              }
-              return updated;
-            });
-            playSystemBeep(523.25, 0.25); // visual boarding ping sound
-          }
-
-          return next;
-        });
-      }, 4000); // 4 seconds per stop simulation
-    }
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, [isSimulating, routeStops]);
+  // Use the custom simulation hook
+  const { currentStopIndex, setCurrentStopIndex, handleResetSimulation } = useSimulation(
+    routeStops,
+    isSimulating,
+    setIsSimulating,
+    setStudents,
+    playSystemBeep,
+    isFirebaseConfigured,
+    syncStudentsToFirebase
+  );
 
   // Update animated bus coordinates smoothly as stop index changes
   useEffect(() => {
@@ -587,7 +371,11 @@ export default function App() {
   };
 
   // Student boarding manual check ins
-  const handleUpdateStudentStatus = (studentId: string, status: BoardingStatus) => {
+  const handleUpdateStudentStatus = async (studentId: string, status: BoardingStatus) => {
+    // 1. Capture previous state for rollback
+    const previousStudents = [...students];
+
+    // 2. Optimistic Update
     setStudents(prev => prev.map(s => {
       if (s.id === studentId) {
         return { ...s, boardingStatus: status };
@@ -595,8 +383,17 @@ export default function App() {
       return s;
     }));
     playSystemBeep(status === 'boarded' ? 659.25 : 440, 0.1);
+
+    // 3. Sync to Firebase
     if (isFirebaseConfigured()) {
-      updateStudentBoardingStatusInFirebase(studentId, status).catch(err => console.error(err));
+      try {
+        await updateStudentBoardingStatusInFirebase(studentId, status);
+      } catch (err) {
+        console.error("Firebase update failed, rolling back:", err);
+        // 4. Rollback on failure
+        setStudents(previousStudents);
+        // Optional: Trigger a notification to the user about the sync failure
+      }
     }
   };
 

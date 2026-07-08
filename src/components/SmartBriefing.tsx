@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Student, DelayAlert, RouteStop } from '../types';
-import { Sparkles, RefreshCw, CheckCircle2, AlertCircle, Download } from 'lucide-react';
+import { Sparkles, RefreshCw, CheckCircle2, AlertCircle, Download, History } from 'lucide-react';
 
 interface SmartBriefingProps {
   students: Student[];
@@ -26,10 +26,19 @@ export default function SmartBriefing({
   temperature
 }: SmartBriefingProps) {
   const [brief, setBrief] = useState('');
+  const [briefingHistory, setBriefingHistory] = useState<string[]>(() => {
+    const saved = localStorage.getItem('roxy_bus_briefing_history');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isRealAI, setIsRealAI] = useState(false);
   const [hasKeyButFailed, setHasKeyButFailed] = useState(false);
+
+  // Sync briefing history to localStorage
+  useEffect(() => {
+    localStorage.setItem('roxy_bus_briefing_history', JSON.stringify(briefingHistory));
+  }, [briefingHistory]);
 
   // Typewriter effect
   const [displayedBrief, setDisplayedBrief] = useState('');
@@ -94,6 +103,12 @@ export default function SmartBriefing({
       setBrief(data.brief);
       setIsRealAI(data.isRealAI || false);
       setHasKeyButFailed(data.hasKeyButFailed || false);
+      
+      // Add to history
+      setBriefingHistory(prev => {
+        const next = [data.brief, ...prev].slice(0, 5);
+        return next;
+      });
     } catch (err: any) {
       console.error(err);
       setError(err.message || 'Error loading Smart Dispatch brief.');
@@ -238,6 +253,26 @@ export default function SmartBriefing({
                 Download Route Schedule (CSV)
               </button>
             </div>
+
+            {/* Briefing History Section */}
+            {briefingHistory.length > 0 && (
+              <div className="mt-4 pt-3 border-t border-[#2A2A30]">
+                <h4 className="text-[10px] uppercase tracking-widest text-[#8E9299] mb-2 font-bold flex items-center gap-1">
+                  <History className="w-3 h-3" /> Recent Briefings
+                </h4>
+                <div className="space-y-2">
+                  {briefingHistory.map((h, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setBrief(h)}
+                      className="w-full text-left text-[10px] p-2 bg-[#0A0A0C] border border-[#2A2A30] rounded-lg text-[#8E9299] hover:text-white hover:border-[#3B82F6] transition-all truncate"
+                    >
+                      {h.substring(0, 40)}...
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
