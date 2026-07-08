@@ -176,7 +176,6 @@ export default function App() {
   }, [solverConfig, systemPrompt, modelTemp]);
 
   // Simulation states
-  const [currentStopIndex, setCurrentStopIndex] = useState(0);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulatedBusPos, setSimulatedBusPos] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -420,23 +419,6 @@ export default function App() {
       }
       return next;
     });
-  };
-
-  const handleResetSimulation = () => {
-    setIsSimulating(false);
-    setCurrentStopIndex(0);
-    // Reset boarding status of all active students back to waiting
-    const resetStudents = students.map(s => {
-      if (s.boardingStatus !== 'absent') {
-        return { ...s, boardingStatus: 'waiting' as BoardingStatus };
-      }
-      return s;
-    });
-    setStudents(resetStudents);
-    playSystemBeep(587.33, 0.2);
-    if (isFirebaseConfigured()) {
-      syncStudentsToFirebase(resetStudents).catch(err => console.error(err));
-    }
   };
 
   return (
