@@ -14,10 +14,8 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-    build: {
-      rollupOptions: {
-        external: [/^@firebase\//],
-      },
+    optimizeDeps: {
+      include: ['firebase/app', 'firebase/firestore'],
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
